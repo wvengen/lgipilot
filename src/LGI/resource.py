@@ -161,8 +161,8 @@ class Resource(Connection):
         if not self._connection: self.connect()
         args = { 'project': self._project, 'session_id': self._sessionId }
         args['application'] = application
-        if start: args['start'] = limit
-        if limit: args['limit'] = limit
+        if start is not None: args['start'] = limit
+        if limit is not None: args['limit'] = limit
         ret = self._postToServer("/resources/resource_request_work.php", args)
         ret = ret['LGI']['response']
         if not 'job' in ret: ret['job'] = []
@@ -192,7 +192,7 @@ class Resource(Connection):
     
     def close(self):
         '''Signoff resource and close connection'''
-        if self._sessionId:
+        if self._sessionId is not None:
             self._signoff()
         Connection.close(self)
 

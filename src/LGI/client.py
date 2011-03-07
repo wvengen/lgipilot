@@ -23,19 +23,19 @@ class Client(Connection):
         Connection.__init__(self, url, project, certificate, privateKey, caChain)
         self._user = user
         self._groups = groups
-        if not self._user:
+        if self._user is None:
             self._user = self.__readConfig("user")
-        if not self._groups:
+        if self._groups is None:
             self._groups = self.__readConfig("groups")
-        if not self._url:
+        if self._url is None:
             self._url = self.__readConfig("defaultserver")
-        if not self._project:
+        if self._project is None:
             self._project = self.__readConfig("defaultproject")
-        if not self._certificate:
+        if self._certificate is None:
             self._certificate = os.path.join(os.getenv("HOME"), '.LGI', 'certificate')
-        if not self._privateKey:
+        if self._privateKey is None:
             self._privateKey= os.path.join(os.getenv("HOME"), '.LGI', 'privatekey')
-        if not self._caChain:
+        if self._caChain is None:
             self._caChain= os.path.join(os.getenv("HOME"), '.LGI', 'ca_chain')
 
     def jobState(self, jobId):
@@ -43,7 +43,7 @@ class Client(Connection):
         args =  {'project': self._project,
                  'user': self._user,
                  'groups': self._groups}
-        if jobId: args['job_id'] = jobId
+        if jobId is not None: args['job_id'] = jobId
         ret = self._postToServer("/interfaces/interface_job_state.php", args)
         return ret['LGI']['response']
 
@@ -52,10 +52,10 @@ class Client(Connection):
         args = {'project': self._project,
                 'user': self._user,
                 'groups': self._groups}
-        if application: args['application'] = application
-        if state: args['state'] = state
-        if start: args['start'] = start
-        if limit: args['limit'] = limit
+        if application is not None: args['application'] = application
+        if state is not None: args['state'] = state
+        if start is not None: args['start'] = start
+        if limit is not None: args['limit'] = limit
         ret = self._postToServer("/interfaces/interface_job_state.php", args)
         ret = ret['LGI']['response']
         if type(ret['job']) != list: ret['job'] = [ ret['job']]
@@ -66,7 +66,7 @@ class Client(Connection):
         args =  {'project': self._project,
                  'user': self._user,
                  'groups': self._groups}
-        if jobId: args['job_id'] = jobId
+        if jobId is not None: args['job_id'] = jobId
         ret = self._postToServer("/interfaces/interface_delete_job.php", args)
         return ret['LGI']['response']
 
@@ -76,11 +76,11 @@ class Client(Connection):
                 'user': self._user,
                 'groups': self._groups,
                 'number_of_uploaded_files': 0}
-        if application: args['application'] = application
-        if targetResources: args['target_resources'] = targetResources
-        if writeAccess: args['write_access'] = writeAccess
-        if readAccess: args['read_access'] = readAccess
-        if input_: args['input'] = binascii.b2a_hex(input_)
+        if application is not None: args['application'] = application
+        if targetResources is not None: args['target_resources'] = targetResources
+        if writeAccess is not None: args['write_access'] = writeAccess
+        if readAccess is not None: args['read_access'] = readAccess
+        if input_ is not None: args['input'] = binascii.b2a_hex(input_)
         fileargs = {}
         for filename in files:
             args['number_of_uploaded_files'] += 1

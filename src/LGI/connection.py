@@ -44,6 +44,7 @@ class Connection:
                 # XXX still bails if username/password present
                 if dURL[1].find(':') < 0:
                     self._host = dURL[1]
+                    self._port = None
                 else:
                     (self._host, self._port) = dURL[1].split(':', 1)
                     self._port = int(self._port)
@@ -91,7 +92,7 @@ class Connection:
                 "Accept": "text/plain",
                 "Connection": "keep-alive" }
 
-        if not path: path = self._path + apipath
+        if path is None: path = self._path + apipath
         try:
             self._connection.request("POST", path, body, headers)
             response = self._connection.getresponse()
