@@ -1,0 +1,6 @@
+# compiled Python objects
+*.pyc
+# resulting pilotjob tarball
+pilotdist/pilotjob.tar.gz
+# vi backup files
+.*.sw?
