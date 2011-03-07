@@ -38,13 +38,13 @@ if [ ! -e "$keyfile" ]; then
 	err=1
 fi
 
-cafile=`cat LGI.cfg |$XML LGI|$XML resource|$XML resource_key_file`
+cafile=`cat LGI.cfg |$XML LGI|$XML ca_certificate_file`
 if [ ! -e "$cafile" ]; then
 	echo "Error: CA certificate file not found: $cafile" >/dev/stderr
 	err=1
 fi
 
-lgiserver=`cat LGI.cfg|$XML LGI|$XML resource|$XML project_master_server`
+lgiserver=`cat LGI.cfg|$XML LGI|$XML resource|$XML project|$XML project_master_server`
 if [ ! "$lgiserver" -o "$lgiserver" == "https://example.com/LGI" ]; then
 	echo "Error: LGI server not specified" >/dev/stderr
 	err=1
