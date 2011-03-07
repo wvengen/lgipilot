@@ -2,5 +2,8 @@
 *.pyc
 # resulting pilotjob tarball
 pilotdist/pilotjob.tar.gz
+# run-time files
+runhere/
+lgipilot.log*
 # vi backup files
 .*.sw?
