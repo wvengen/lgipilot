@@ -1,0 +1,72 @@
+LGI pilot job package
+---------------------
+
+This directory is the default location for the pilotjob tarball. This contains
+the actual job that is run on the grid by the LGI pilotjob manager.
+
+Two files should be present in this directory when starting the LGI pilot job
+manager:
+  pilotrun.sh       Script that is started on the grid node.
+  pilotjob.tar.gz   Tarball copied to the grid node as well, containing
+                      everything required to run the LGI resource daemon, as
+                      well as the application you want to deploy with LGI.
+The latter is not present in the LGI pilotjob manager distribution, as it is
+created from the pilotjob/ directory after customisation.
+
+
+* Preparing the pilotjob environment
+
+The directory pilotjob/ contains a basic LGI helloworld application almost
+ready to be deployed as a grid pilotjob. This serves as an example, and as
+a source for the pilotjob helper scripts (bin/lgipilot*).
+
+To prepare your own application for the LGI pilotjob framework, start with an
+ordinary resource daemon setup that already works (see LGI documentation).
+
+For the pilotjob package, start with the helloworld pilotjob as a basis.
+This consists of:
+ - LGI resource daemon and utilities (in bin/ and lib/)
+ - pilotjob helper-scripts (bin/)
+ - resource daemon configuration and scripts (LGI.cfg, scripts/, certificates/)
+ - startup script (rundaemon)
+
+Then modify it for your application:
+ 1) Copy your application's binaries to bin/ and its libraries to lib/. Your
+      application should be able to run with just this on a grid node.
+ 2) Copy the key, certificate and ca certificate for your resource to
+      certificates/.
+ 3) Substitute the helloworld scripts for your scripts.
+ 4) Update LGI.cfg for your application, and make sure all scripts and
+      certificates are referenced using relative paths.
+ 5) Adapt the scripts
+    5a) add "lgipilot_job_check_running" to the job_check_running_script
+    5b) add "lgipilot_check_system_limits" to the check_system_limits_script
+    These scripts only operate if run as a pilot job, so you can test
+    the resource daemon locally.
+
+Then you can test the resource daemon locally using `rundaemon`. When that
+works with your project server, you can package the files by running
+`./create_package`.
+
+
+* Testing the pilotjob package
+
+To make sure that the pilotjob is correctly packaged, you can manually submit
+the pilotjob. Make sure that the LGI pilotjob manager is not running, and that
+no resource daemons are running on the grid.
+
+Open the LGI basic interface and view the project resource list. Look at the
+time stamp of the resource that you'll be running on the grid. This time stamp
+is probably not too recent, since no resource daemon is running yet.
+
+On a grid UI, make sure you have a valid proxy certificate (or else run
+`voms-proxy-int --voms <my_voms>`), and submit pilottest.jdl (for example by
+running `glite-wms-job-submit -a pilottest.jdl`). Look back at the resource
+list in LGI's web interface. At some point in time, the time stamp should
+be updated. Try submitting a job, and see if it is processed correctly.
+Then kill the grid job (`glite-wms-job-cancel <job_id>`) and see if the time
+stamp stop being updated.
+
+If this all happens correctly, the pilotjob manager should be able to do its
+job properly. If not, you'll need to troubleshoot this first.
+

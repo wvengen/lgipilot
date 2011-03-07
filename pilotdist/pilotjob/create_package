@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# Create pilotjob package from here
+#
+
+### parse options
+
+help=0
+if [ "$1" == "-h" -o "$1" == "--help" ]; then
+	help=1
+	shift
+fi
+
+if [ $help -gt 0 -o  "$2" ]; then
+	echo "Usage: $0 [<destination.tar.gz>]" >/dev/stderr
+	echo >/dev/stderr
+	echo "  Creates a pilotjob package from this directory." >/dev/stderr
+	echo "  Please see README for more details." >/dev/stderr
+	echo >/dev/stderr
+	exit 1
+fi
+
+
+### some basic checks
+
+err=0
+XML=`dirname $0`/bin/xml
+
+certfile=`cat LGI.cfg |$XML LGI|$XML resource|$XML resource_certificate_file`
+if [ ! -e "$certfile" ]; then
+	echo "Error: certificate file not found: $certfile" >/dev/stderr
+	err=1
+fi
+
+keyfile=`cat LGI.cfg |$XML LGI|$XML resource|$XML resource_key_file`
+if [ ! -e "$keyfile" ]; then
+	echo "Error: private key file not found: $keyfile" >/dev/stderr
+	err=1
+fi
+
+cafile=`cat LGI.cfg |$XML LGI|$XML resource|$XML resource_key_file`
+if [ ! -e "$cafile" ]; then
+	echo "Error: CA certificate file not found: $cafile" >/dev/stderr
+	err=1
+fi
+
+lgiserver=`cat LGI.cfg|$XML LGI|$XML resource|$XML project_master_server`
+if [ ! "$lgiserver" -o "$lgiserver" == "https://example.com/LGI" ]; then
+	echo "Error: LGI server not specified" >/dev/stderr
+	err=1
+fi
+
+[ $err -gt 0 ] && exit 2
+
+### create tarball
+
+pkg=`dirname $0`/../pilotjob.tar.gz
+[ "$1" ] && pkg="$1"
+
+[ -e "$pkg" ] && mv "$pkg" "$pkg.old"
+
+# don't use spaces ...
+find . ! -path . -a ! -path ./LGI.pid -a ! -path "./`basename $0`" -a ! -path './runhere/*' -print | xargs tar czf "$pkg"
+
+echo "Pilotjob tarball created in: $pkg"
+

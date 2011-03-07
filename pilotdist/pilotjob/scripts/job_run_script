@@ -1,0 +1,15 @@
+#!/bin/sh
+echo $$ > running
+
+sleep 10
+echo -n "Hello_Pilot from " > LGI_output
+sleep 20
+cat LGI_target_resources >> LGI_output
+sleep 40
+echo -n " submitted with input: " >> LGI_output
+sleep 80
+cat LGI_input >> LGI_output
+sleep 160
+
+touch finished
+rm running

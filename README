@@ -1,0 +1,67 @@
+LGI Pilot job manager (lgipilot)
+--------------------------------
+
+To use the Leiden Grid Infrastructure (LGI) on a grid (like gLite) it can be
+useful to make use of pilotjobs. Most importantly, it eliminates latency
+inherent in grids. Secondly, end-users can use the grid without the need for
+grid certificates (though this requires some LGI tweaking at the moment).
+
+Requirements:
+ - Python (tested with 2.4)
+ - gLite user-interface
+
+
+* Quickstart overview
+
+1. Install an LGI project server
+   Please see http://fwnc7003.leidenuniv.nl/LGI/ for more information.
+   This typically includes installing a LAMP stack, the LGI application,
+   setting up users and groups, and configuring a resource daemon.
+
+2. Configure a resource daemon for your application.
+   This is explained by the LGI documentation as well. By running this
+   resource daemon on a Linux host you should be able to use your
+   application from within LGI.
+
+3. Adapt the resource daemon configuration for the grid job.
+   To run the resource daemon on the grid, it needs to be self-contained
+   and a little adapted. This is explained below.
+
+4. Run the LGI pilot job manager (lgipilot)
+   using the resource daemon tarball just created. See below.
+
+
+* Resource daemon configuration
+
+As mentioned in the LGI documentation, a resource daemon needs to be
+configured for use with your specific application. This includes
+editing LGI.cfg, pointing it to its key and certificate, and creating
+or editing various script for things like starting and stopping the
+application.
+
+To run the application on the grid, the resource daemon, its configuration and
+the application must be bundled, including any dependencies. This is
+described in pilotdist/README.pilot. This results in a tarball which should
+be placed in pilotdist/pilotjob.tar.gz.
+
+
+* Run LGI pilot job manager
+
+With the pilotjob tarball in place, the LGI pilot job manager (lgipilot) can be
+started on a grid user-interface (UI, which means that it has all the tools and
+configuration to submit and interact with grid jobs). Make sure that you have
+a valid proxy certificate (*).
+
+You may want to change the pilotjob manager configuration in lgipilot.ini,
+section 'LGI'. SchedMin/SchedMax depend on your expected load and the amount of
+jobs slots (fair share) you have available, the other timing-related options
+are dependent on the typical length of your jobs and grid latency. More
+guidelines on how to configure this and monitoring tools may become available
+in the future.
+The pilotjob manager is based on Ganga, which has many configuration options
+as well in the same file. Please see comments and Ganga documentation.
+
+
+(*) For production deployments, one would want to use a robot certificate that
+    updates the proxy certificate once a day or so.
+

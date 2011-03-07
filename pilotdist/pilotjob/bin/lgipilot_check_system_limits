@@ -1,0 +1,13 @@
+#!/bin/sh
+[ "${LGI_IS_PILOTJOB}" ] || exit 0
+# kill daemon when idle time exceeds predefined value
+[ "${SCHED_WAIT_TERM}" ] || exit 0
+[ -e "${LGI_RUNNING_STAMP}" ] || exit 0
+NOW="`date +%s`"
+LASTRUNNING="`cat "${LGI_RUNNING_STAMP}"`"
+DIFF="`expr "${NOW}" - "${LASTRUNNING}"`"
+if [ ${DIFF} -ge ${SCHED_WAIT_TERM} ]; then
+	echo "pilotjob: killing daemon after ${DIFF} seconds of idle-time"
+	kill "`cat ${LGI_PID_FILE}`"
+fi
+

@@ -1,0 +1,10 @@
+Type = "Job";
+Jobtype = "Normal";
+Executable = "/bin/sh";
+Arguments = "pilotrun.sh";
+StdOutput = "stdout.txt";
+StdError = "stderr.txt";
+InputSandbox = {"pilotrun.sh", "pilotjob.tar.gz"};
+OutputSandbox = {"stdout.txt", "stderr.txt"};
+Shallowretrycount = 3;
+Requirements = ( other.glueceinfototalcpus >= 1 && other.gluecepolicymaxcputime > 30 );

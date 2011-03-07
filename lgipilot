@@ -1,0 +1,82 @@
+#!/usr/bin/env python
+
+"""Executable for starting the LGI pilot job manager
+
+   The pilot job manager is run within the Ganga framework.
+   This script is basically the standard Ganga run script with
+   a couple of modifications.
+
+   First a Ganga environment is setup, and then the additional
+   LGI-related threads are created. By default it runs in batch
+   mode in the foreground, but other command-line options can
+   be used to run as a daemon, or interactively with IPython.
+"""
+
+import os
+import sys
+exeDir = os.path.normpath(os.path.abspath(os.path.dirname(sys.argv[0])))
+# run in own directory to resolve relative paths properly
+os.chdir(exeDir)
+sys.argv[0] = os.path.basename(sys.argv[0])
+
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Perform setup needed for using Ganga Public Interface (GPI)
+# This is a Copy/Paste logic which must stay in THIS file
+
+def standardSetup():
+   """Function to perform standard setup for Ganga.
+   """   
+   # insert the path to Ganga itself
+   libDir = os.path.join(exeDir, 'src')
+   sys.path.insert(0, libDir)
+
+   import Ganga.PACKAGE
+   Ganga.PACKAGE.standardSetup()
+
+standardSetup()
+del standardSetup
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+import Ganga.Runtime
+from Ganga.Core import GangaException
+
+# Customise Ganga invocation for the LGI Pilot job manager
+gangaCfg = os.path.join(exeDir, 'lgipilot.ini')
+
+runhereDir = os.path.join(exeDir, 'runhere')
+gangaArgv = [sys.argv[0], '--config=%s'%(os.path.join(exeDir, 'lgipilot.ini')),
+             '-o[Logging]_logfile=%s'%(os.path.join(exeDir, 'lgipilot.log')),
+             '-o[Configuration]gangadir=%s'%(runhereDir)
+            ] + sys.argv[1:]
+hello = '*** Welcome to the LGI Pilot job manager ***'
+
+# hack to use non-interactive as default without script
+if not '-i' in gangaArgv[1:]:
+   gangaArgv.append(os.path.join(exeDir, 'src', 'dummy.py'))
+
+# Process options given at command line and in configuration file(s)
+# Perform environment setup and bootstrap
+Ganga.Runtime._prog = Ganga.Runtime.GangaProgram(hello_string=hello, argv=gangaArgv)
+Ganga.Runtime._prog.parseOptions()
+
+try:
+   # avoid useless transition message when new repository is created
+   # TODO file upstream bug
+   Ganga.Runtime._prog.configure()
+   if not os.path.exists(os.path.join(runhereDir,'repository')):
+      from Ganga.Utility.Config import Config
+      os.makedirs(os.path.join(runhereDir,'repository',Config.getConfig("Configuration")['user'],'LocalXML','6.0'))
+   Ganga.Runtime._prog.initEnvironment()
+   Ganga.Runtime._prog.bootstrap()
+   # Import GPI and run Ganga
+   from Ganga.GPI import *
+   try:
+      Ganga.Runtime._prog.run()
+   except KeyboardInterrupt:
+      Ganga.Runtime._prog.logger.info('Terminated by keyboard interrupt')
+      pass
+except GangaException,x:
+   Ganga.Runtime._prog.log(x)
+   sys.exit(-1)
+
