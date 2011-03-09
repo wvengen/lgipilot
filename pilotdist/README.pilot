@@ -26,6 +26,8 @@ ordinary resource daemon setup that already works (see LGI documentation).
 For the pilot job package, start with the helloworld pilot job as a basis.
 This consists of:
  - LGI resource daemon and utilities (in bin/ and lib/)
+     Note that version 1.30 of the LGI utilities are required to support
+     relative paths. These are supplied with this package.
  - pilot job helper-scripts (bin/)
  - resource daemon configuration and scripts (LGI.cfg, scripts/, certificates/)
  - startup script (rundaemon)

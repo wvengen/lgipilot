@@ -9,6 +9,7 @@ grid certificates (though this requires some LGI tweaking at the moment).
 Requirements:
  - Python (tested with 2.4)
  - gLite user-interface
+ - LGI project server version 1.29 or later
 
 
 * Quickstart overview

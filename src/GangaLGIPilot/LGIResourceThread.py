@@ -16,12 +16,9 @@ class LGIResourceThread(GangaThread):
 		self.res = LGI.Resource(config['PilotDist'])
 		# number of queued LGI jobs
 		self.queued = None
-		# if warning about outdated LGI project server was shown or not
-		self._unlockWarned = False
 
 	def run(self):
 		# create connection
-		self._unlockWarned = False
 		self.log.info('Connecting to LGI project %s server %s'%(self.res._project, self.res._url))
 		self.res.connect()
 		self.queued = None
@@ -53,20 +50,18 @@ class LGIResourceThread(GangaThread):
 
 	def _workForApp(self, app):
 		'''Return number of pending jobs for application'''
+		# TODO check we have at least LGI project server version 1.29, which
+		# supports receiving limit=0 to return the number of queued jobs
+		# (instead of just 0).
 		resp = self.res.requestWork(app, limit=0)
 		# error handling
 		if 'error' in resp:
 			raise LGI.LGIException('LGI error %d: %s'%(resp['error']['number'], resp['error']['message']))
 		if not 'number_of_jobs' in resp:
 			raise LGI.LGIException('Malformed LGI response: %s'%str(resp))
-		# if jobs are returned while limit=0, do release their
-		# locks (only happens on old LGI servers)
+		# we can't get jobs back since limit=0; do check anyway
 		if resp['number_of_jobs']>0 and 'job' in resp and len(resp['job'])>0:
-			if not self._unlockWarned:
-				self.log.warn('Old LGI project server requires unlocking jobs (small performance hit)')
-				self._unlockWarned = True
-			for job in resp['job']:
-				self.res.unlockJob(job['job_id'])
+			raise LGI.LGIException('Unexpected LGI response: limit=0 and number_of_jobs=%d'%len(resp['job']))
 		# return number of jobs
 		return resp['number_of_jobs']
 
