@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import time
+import datetime
 import LGI
 from InterpoList import InterpoList
 from Ganga.Utility import Config
@@ -18,13 +19,15 @@ config.addOption('SchedMin', 1, 'Minimum number of pilotjobs at all times')
 config.addOption('SchedMax', 5, 'Maximum number of pilotjobs')
 
 config.addOption('Poll', 30, 'LGI thread polling time')
-config.addOption('Update', 30, 'Pilot thread update time')
+config.addOption('Update', 10, 'Pilot thread update time')
 config.addOption('WaitNew', 50, 'If after this many seconds there are (still) more LGI jobs than pilotjobs, spawn new pilotjobs.')
 config.addOption('WaitTerm', 300, 'Terminate pilotjob after seconds of idle time')
 
 config.addOption('StatsInterval', 0, 'Statistics logging interval, or 0 for no statistics')
 config.addOption('StatsHistory', 60*60, 'Seconds of statistics history to keep')
 config.addOption('StatsFile', 'runhere/stats.csv', 'CSV file to log statistics to, or empty for no statistics')
+
+config.addOption('KeepJobs', 168, 'Number of hours after termination to keep pilotjob info (including logs)')
 
 
 def submitpilots(n=1, doTerm=True):
@@ -110,8 +113,12 @@ class PilotThread(GangaThread):
 			nlgijobs[now] -= newpilots
 
 			# cleanup finished jobs
-			jobs.select(status='finished').remove()
-			jobs.select(status='completed').remove()
+			utcnow = datetime.datetime.utcnow()
+			for s in ['finished', 'completed', 'killed', 'failed']:
+				for j in jobs.select(status=s):
+					delta = utcnow - max(j.time.timestamps.values())
+					if delta.seconds/60/60 >= config['KeepJobs']:
+						j.remove()
 			
 			# and wait for next iteration
 			while not self.should_stop() and time.time()-now < config['Update']:
