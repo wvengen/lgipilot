@@ -12,6 +12,7 @@ import sys
 import xml.dom.minidom
 import tempfile
 import tarfile
+import atexit
 
 import xml2dict
 from connection import Connection, LGIException
@@ -95,6 +96,9 @@ class Resource(Connection):
             fileprefix = './'
             conf = dist.extractfile(fileprefix+cfg)
 
+        # register cleanup handler first, to avoid problems with __del__
+        atexit.register(lambda: self.__cleanup())
+        # then unpack relevant files into temporary directory
         self._tmpdir = tempfile.mkdtemp('.tmp','lgipilot.')
         self.parseConfig(conf)
 
@@ -125,9 +129,9 @@ class Resource(Connection):
                     pass
         dist.close()
 
-    def __del__(self):
+    def __cleanup(self):
         '''Cleanup any temporary files and close connection'''
-        Connection.__del__(self)
+        self.close()
         if self._tmpdir:
             self.__remove_if_tmp(self._certificate)
             self.__remove_if_tmp(self._privateKey)

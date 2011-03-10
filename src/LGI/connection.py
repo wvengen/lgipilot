@@ -59,10 +59,6 @@ class Connection:
             self._connection.close()
             self._connection = None
 
-    def __del__(self):
-        '''Upon deletion of object, close connection automatically.'''
-        self.close()
-    
     def _postToServer(self, apipath, variables={}, files={}, path=None):
         '''Send a request to the LGI server'''
         if self._connection is None: self.connect()

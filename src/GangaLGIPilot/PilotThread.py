@@ -111,7 +111,6 @@ class PilotThread(GangaThread):
 
 			# some debugging
 			if self.log.isEnabledFor('DEBUG'):
-				self.log.debug(str(nlgijobs[now-config['WaitNew']:]))
 				self.log.debug('LGI: %d - %d pending in last %d s --> pilots: %d wanted, %d queued, %d running'%(
 					int(min(nlgijobs[now-config['WaitNew']:])), int(max(nlgijobs[now-config['WaitNew']:])),
 					config['WaitNew'], newpilots, curpilotswait, curpilotsrun))
