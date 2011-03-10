@@ -22,6 +22,7 @@ config.addOption('Poll', 30, 'LGI thread polling time')
 config.addOption('Update', 10, 'Pilot thread update time')
 config.addOption('WaitNew', 60, 'If after this many seconds there are (still) more LGI jobs than pilotjobs, spawn new pilotjobs.')
 config.addOption('WaitTerm', 300, 'Terminate pilotjob after seconds of idle time')
+config.addOption('MaxRuntime', None, 'Maximum run-time of pilotjobs in seconds. Leave empty to run indefinitely until batch system terminates it.')
 
 config.addOption('StatsInterval', 0, 'Statistics logging interval, or 0 for no statistics')
 config.addOption('StatsHistory', 60*60, 'Seconds of statistics history to keep')
@@ -43,6 +44,9 @@ def submitpilots(n=1, doTerm=True):
 
 	if doTerm:
 		j.application.env['SCHED_WAIT_TERM'] = str(config['WaitTerm'])
+
+	if config['MaxRuntime'] is not None:
+		j.application.env['SCHED_TERM_AFTER'] = str(config['MaxRuntime'])
 
 	j.submit()
 	for i in range(1, n-1):
