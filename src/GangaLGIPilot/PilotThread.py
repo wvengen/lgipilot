@@ -15,12 +15,12 @@ config.addOption('PilotDist', 'pilotdist/pilotjob.tar.gz',
 config.addOption('PilotScript', 'pilotdist/pilotrun.sh',
 	'Script to run inside pilotjob, which unpacks the tarball and executes the resource daemon')
 
-config.addOption('SchedMin', 1, 'Minimum number of pilotjobs at all times')
-config.addOption('SchedMax', 5, 'Maximum number of pilotjobs')
+config.addOption('SchedMin',  1, 'Minimum number of pilotjobs at all times')
+config.addOption('SchedMax', 10, 'Maximum number of pilotjobs')
 
 config.addOption('Poll', 30, 'LGI thread polling time')
 config.addOption('Update', 10, 'Pilot thread update time')
-config.addOption('WaitNew', 50, 'If after this many seconds there are (still) more LGI jobs than pilotjobs, spawn new pilotjobs.')
+config.addOption('WaitNew', 60, 'If after this many seconds there are (still) more LGI jobs than pilotjobs, spawn new pilotjobs.')
 config.addOption('WaitTerm', 300, 'Terminate pilotjob after seconds of idle time')
 
 config.addOption('StatsInterval', 0, 'Statistics logging interval, or 0 for no statistics')
@@ -69,7 +69,7 @@ class PilotThread(GangaThread):
 
 		# main pilotjob loop
 		self.nlgijobs = nlgijobs = InterpoList()
-
+		self.nlgijobs[time.time()-1] = 0
 		self.log.debug('Starting PilotThread main loop')
 		while not self.should_stop():
 			# update historical list of number pilotjobs
@@ -88,29 +88,38 @@ class PilotThread(GangaThread):
 				# job. The max(nlgijobs[<some history>]) below does the rest.
 				nlgijobs[now] -= newbaseline
 
-			curpilots = sum([len(jobs.select(status=s)) for s in ['running', 'submitted', 'submitting']])
+			curpilotsrun = len(jobs.select(status='running'))
+			curpilotswait = sum([len(jobs.select(status=s)) for s in ['submitted', 'submitting']])
+			curpilots = curpilotsrun + curpilotswait
 
 			# find out how many pilotjobs we want right now
-			# main rule: #new_pilotjobs = #lgijobs_waiting/2
+			# main rule: #new_pilotjobs = #lgijobs_waiting/2 - #current_pilots_waiting
 			# since number of lgijobs waiting is influenced by running
 			# pilots, only submit half of jobs to approach it exponentially,
 			# so as to avoid spawning too many pilots during job bursts.
-			newpilots = int(max(nlgijobs[now-config['WaitNew']:])/2)
+			# The number of pilotjobs that's submitted but not yet running is
+			# substracted to avoid over-submission when the grid has long waiting
+			# queues.
+			newpilots = int((max(nlgijobs[now-config['WaitNew']:])+1)/2 - curpilotswait)
 
-			newpilots = max(newpilots, 0)
 			newpilots = min(newpilots, config['SchedMax']-config['SchedMin']-curpilots)
+			newpilots = max(newpilots, 0)
 
 			# some debugging
 			if self.log.isEnabledFor('DEBUG'):
-				self.log.debug('%d - %d pending LGI jobs in the last %d s --> %d new pilots wanted, %d running'%(
+				self.log.debug(str(nlgijobs[now-config['WaitNew']:]))
+				self.log.debug('LGI: %d - %d pending in last %d s --> pilots: %d wanted, %d queued, %d running'%(
 					int(min(nlgijobs[now-config['WaitNew']:])), int(max(nlgijobs[now-config['WaitNew']:])),
-					config['WaitNew'], newpilots, curpilots))
+					config['WaitNew'], newpilots, curpilotswait, curpilotsrun))
 
 			# submit any auto-terminating pilotjobs
 			if newpilots > 0:
 				self.log.info('Submitting %d new pilotjobs'%(newpilots))
-			submitpilots(newpilots)
-			nlgijobs[now] -= newpilots
+				submitpilots(newpilots)
+				# don't submit any new pilotjobs for WaitNew seconds
+				#  by setting the number of currently waiting LGI jobs to zero
+				#nlgijobs[now] -= newpilots
+				nlgijobs[now] = 0
 
 			# cleanup finished jobs
 			utcnow = datetime.datetime.utcnow()
