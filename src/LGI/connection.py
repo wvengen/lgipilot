@@ -35,7 +35,7 @@ class Connection:
     def connect(self):
         '''Connect to the LGI project server. Must be called before
         any other communication is done.'''
-        if not self._host:
+        if self._host is None:
             dURL = urlparse.urlparse(self._url)
 
             if dURL[0] != 'https': 
@@ -49,7 +49,7 @@ class Connection:
                     (self._host, self._port) = dURL[1].split(':', 1)
                     self._port = int(self._port)
                 self._path = dURL[2]
-        if not self._connection: 
+        if self._connection is None: 
             self._connection = _HTTPSConnection(self._host, port=self._port, privateKey=self._privateKey, certificate=self._certificate, caChain=self._caChain)
             self._connection.connect()
 
@@ -65,7 +65,7 @@ class Connection:
     
     def _postToServer(self, apipath, variables={}, files={}, path=None):
         '''Send a request to the LGI server'''
-        if not self._connection: self.connect()
+        if self._connection is None: self.connect()
 
         boundary = "@$_Th1s_1s_th3_b0und@ry_@$"
         data = []
