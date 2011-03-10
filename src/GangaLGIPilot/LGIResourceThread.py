@@ -50,18 +50,27 @@ class LGIResourceThread(GangaThread):
 
 	def _workForApp(self, app):
 		'''Return number of pending jobs for application'''
-		# TODO check we have at least LGI project server version 1.29, which
-		# supports receiving limit=0 to return the number of queued jobs
-		# (instead of just 0).
-		resp = self.res.requestWork(app, limit=0)
+		# LGI project server 1.29 and later returns the total number of jobs
+		# when limit=0, without locking any. Older LGI project servers always
+		# report zero remaining work when limit=0.
+		# Approach: first try with limit=0; if no jobs, try with default limit.
+		nqueued = self.__workForApp2(app, 0)
+		if nqueued > 0:
+			return nqueued
+		else:
+			return self.__workForApp2(app, None)
+
+	def __workForApp2(self, app, limit):
+		resp = self.res.requestWork(app, limit)
 		# error handling
 		if 'error' in resp:
 			raise LGI.LGIException('LGI error %d: %s'%(resp['error']['number'], resp['error']['message']))
 		if not 'number_of_jobs' in resp:
 			raise LGI.LGIException('Malformed LGI response: %s'%str(resp))
-		# we can't get jobs back since limit=0; do check anyway
+		# if any jobs locks were obtained, signoff to release them (for old project server)
 		if resp['number_of_jobs']>0 and 'job' in resp and len(resp['job'])>0:
-			raise LGI.LGIException('Unexpected LGI response: limit=0 and number_of_jobs=%d'%len(resp['job']))
+			self.res.signoff()
+			self.res.signup()
 		# return number of jobs
 		return resp['number_of_jobs']
 

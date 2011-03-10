@@ -49,24 +49,24 @@ class Resource(Connection):
         assumed to be the dirname of LGIconf. If reldir is None and LGIconf 
         is a file object, relative paths are retained.'''
 
-        if not LGIconf: return
+        if LGIconf is None: return
 
         conf = xml2dict.xml2dict(xml.dom.minidom.parse(LGIconf))
 
-        if not reldir and isinstance(LGIconf, str):
+        if reldir is None and isinstance(LGIconf, str):
             reldir = os.path.dirname(LGIconf)
         cert = conf['LGI']['resource']['resource_certificate_file']
-        if reldir and not os.path.isabs(cert):
+        if reldir is not None and not os.path.isabs(cert):
             cert = os.path.join(reldir, cert)
         self._certificate = cert
 
         key = conf['LGI']['resource']['resource_key_file']
-        if reldir and not os.path.isabs(key):
+        if reldir is not None and not os.path.isabs(key):
             key = os.path.join(reldir, key)
         self._privateKey = key
 
         ca = conf['LGI']['ca_certificate_file']
-        if reldir and not os.path.isabs(ca):
+        if reldir is not None and not os.path.isabs(ca):
             ca = os.path.join(reldir, ca)
         self._caChain = ca
 
@@ -153,12 +153,12 @@ class Resource(Connection):
     def connect(self):
         '''connect to project server and register resource'''
         Connection.connect(self)
-        if not self._sessionId:
-            self._signup()
+        if self._sessionId is None:
+            self.signup()
 
     def requestWork(self, application, start = None, limit = None):
         '''request list of work from project server, also obtains job locks'''
-        if not self._connection: self.connect()
+        self._ensureConnection()
         args = { 'project': self._project, 'session_id': self._sessionId }
         args['application'] = application
         if start is not None: args['start'] = limit
@@ -171,21 +171,21 @@ class Resource(Connection):
 
     def lockJob(self, jobId):
         '''Lock a job'''
-        if not self._connection: self.connect()
+        self._ensureConnection()
         ret = self._postToServer("/resources/resource_lock_job.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
         return ret['LGI']['response']
 
     def unlockJob(self, jobId):
         '''Unlock a job'''
-        if not self._connection: self.connect()
+        self._ensureConnection()
         ret = self._postToServer("/resources/resource_unlock_job.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
         return ret['LGI']['response']
 
     def jobState(self, jobId):
         '''Request the job status of a job'''
-        if not self._connection: self.connect()
+        self._ensureConnection()
         ret = self._postToServer("/resources/resource_job_state.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
         return ret['LGI']['response']
@@ -193,22 +193,29 @@ class Resource(Connection):
     def close(self):
         '''Signoff resource and close connection'''
         if self._sessionId is not None:
-            self._signoff()
+            self.signoff()
         Connection.close(self)
 
-    def _signup(self):
+    def signup(self):
         '''signup resource with server
         @return sessionid obtained'''
         ret = self._postToServer("/resources/resource_signup_resource.php", { 'project': self._project })
         self._sessionId = ret['LGI']['response']['session_id']
         return ret
 
-    def _signoff(self):
+    def signoff(self):
         '''signoff resource from server'''
         ret = self._postToServer("/resources/resource_signoff_resource.php", {
             'project': self._project, 'session_id': self._sessionId })
         self._sessionId = None
         return ret
+
+    def _ensureConnection(self):
+        '''make sure a connection is present and the resource is signed up'''
+        if self._connection is None:
+            self.connect()
+        if self._sessionId is None:
+            self.signup()
 
 
 # test program
