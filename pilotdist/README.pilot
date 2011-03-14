@@ -4,21 +4,23 @@ LGI pilot job package
 This directory is the default location for the pilot job tarball. This contains
 the actual job that is run on the grid by the LGI pilot job manager.
 
-Two files should be present in this directory when starting the LGI pilot job
+Four files should be present in this directory when starting the LGI pilot job
 manager:
-  pilotrun.sh       Script that is started on the grid node.
-  pilotjob.tar.gz   Tarball copied to the grid node as well, containing
-                      everything required to run the LGI resource daemon, as
-                      well as the application you want to deploy with LGI.
-The latter is not present in the LGI pilot job manager distribution, as it is
+  pilotrun.sh              Script that is started on the grid node.
+  pilotscript_touch.sh     Helper script (for auto-termination)
+  pilotscript_autoterm.sh  Helper script (for auto-termination)
+  pilotjob.tar.gz          Tarball copied to the grid node as well, containing
+                             everything required to run the LGI resource
+                             daemon, including as the application you want to
+                             deploy with LGI.
+The last is not present in the LGI pilot job manager distribution, as it is
 created from the pilotjob/ directory after customization.
 
 
 * Preparing the pilot job environment
 
 The directory pilotjob/ contains a basic LGI helloworld application almost
-ready to be deployed as a grid pilot job. This serves as an example, and as a
-source for the pilot job helper scripts (bin/lgipilot*).
+ready to be deployed as a grid pilot job. This serves as an example.
 
 To prepare your own application for the LGI pilot job framework, start with an
 ordinary resource daemon setup that already works (see LGI documentation).
@@ -28,7 +30,6 @@ This consists of:
  - LGI resource daemon and utilities (in bin/ and lib/)
      Note that version 1.30 of the LGI utilities are required to support
      relative paths. These are supplied with this package.
- - pilot job helper-scripts (bin/)
  - resource daemon configuration and scripts (LGI.cfg, scripts/, certificates/)
  - startup script (rundaemon)
 
@@ -40,11 +41,6 @@ Then modify it for your application:
  3) Substitute the helloworld scripts for your scripts.
  4) Update LGI.cfg for your application, and make sure all scripts and
       certificates are referenced using relative paths.
- 5) Adapt the scripts
-    5a) add "lgipilot_job_check_running" to the job_check_running_script
-    5b) add "lgipilot_check_system_limits" to the check_system_limits_script
-    These scripts only operate if run as a pilot job, so you can test
-    the resource daemon locally.
 
 Then you can test the resource daemon locally using `rundaemon`. When that
 works with your project server, you can package the files by running
@@ -66,9 +62,12 @@ On a grid UI, make sure you have a valid proxy certificate (or else run
 running `glite-wms-job-submit -a pilottest.jdl`). Look back at the resource
 list in LGI's web interface. At some point in time, the time stamp should be
 updated. Try submitting a job, and see if it is processed correctly.  Then kill
-the grid job (`glite-wms-job-cancel <job_id>`) and see if the time stamp stop
+the grid job (`glite-wms-job-cancel <job_id>`) and see if the time stamp stops
 being updated.
 
 If this all happens correctly, the pilot job manager should be able to do its
-job properly. If not, you'll need to troubleshoot this first.
+job properly. If not, you'll need to troubleshoot this first. One way to do so
+is to copy the pilotjob tarball and scripts (pilotdist/*.*) to a temporary
+directory, and run ./pilotstart.sh from there. This should expose any problems
+with the auto-termination hooks.
 

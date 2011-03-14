@@ -1,6 +1,4 @@
 #!/bin/sh
-lgipilot_job_check_running
-# original script
 if [ -f running ]
 then
  PID=`cat running`
