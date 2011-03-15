@@ -65,8 +65,6 @@ class LGIResourceThread(GangaThread):
 	def __workForApp2(self, app, limit):
 		resp = self.res.requestWork(app, limit)
 		# error handling
-		if 'error' in resp:
-			raise LGI.LGIException('LGI error %d: %s'%(resp['error']['number'], resp['error']['message']))
 		if not 'number_of_jobs' in resp:
 			raise LGI.LGIException('Malformed LGI response: %s'%str(resp))
 		# if any jobs locks were obtained, signoff to release them (for old project server)

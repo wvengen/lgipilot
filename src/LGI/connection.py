@@ -19,6 +19,12 @@ except ImportError: import httplib
 class LGIException(Exception):
     pass
 
+class LGIServerException(LGIException):
+    '''Server exception; with response property'''
+    def __init__(self, msg, response):
+        LGIException.__init__(self, msg)
+        self.response = response
+
 class Connection:
     '''Base class for communication to an LGI server. This takes care of
     authentication, posting variables and common xml parsing.'''
@@ -101,7 +107,11 @@ class Connection:
             response = self._connection.getresponse()
     
         rdata = response.read()
-        return xml2dict.xml2dict(xml.dom.minidom.parseString(rdata))
+        resp = xml2dict.xml2dict(xml.dom.minidom.parseString(rdata))
+        if 'error' in resp['LGI']['response']:
+            error = resp['LGI']['response']['error']
+            raise LGIServerException('LGI error %d: %s'%(error['number'], error['message']), resp)
+        return resp
 
 
 # ssl only available from python 2.6 onwards

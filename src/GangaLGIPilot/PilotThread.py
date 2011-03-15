@@ -85,7 +85,10 @@ class PilotThread(GangaThread):
 			now = time.time()
 
 			# TODO truncate history to avoid memory hog
-			nlgijobs[now] = LGI.resource.queued
+			if LGI.resource.queued is not None:
+				nlgijobs[now] = LGI.resource.queued
+			else:
+				nlgijobs[now] = 0 # fallback to no jobs to continue baseline
 			# first make sure baseline of non-terminating pilotjobs is present
 			nbaseline = sum([len(jobs.select(status=s, name='LGIpilot@')) for s in ['running', 'submitted', 'submitting']])
 			newbaseline = max(0, config['SchedMin']-nbaseline)

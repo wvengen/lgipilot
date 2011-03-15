@@ -37,6 +37,7 @@ class StatsThread(GangaThread):
 			try:
 				# add new line of data
 				lgiQueued = LGI.resource.queued
+				if lgiQueued is None: lgiQueued = 0
 				lgiRunning = 0 # TODO
 				pilotQueued = sum([len(jobs.select(status=s)) for s in ['submitted', 'submitting']])
 				pilotRunning = len(jobs.select(status='running'))
