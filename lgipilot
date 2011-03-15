@@ -61,14 +61,18 @@ Ganga.Runtime._prog = Ganga.Runtime.GangaProgram(hello_string=hello, argv=gangaA
 Ganga.Runtime._prog.parseOptions()
 
 try:
+   from Ganga.Utility.Config import Config
    # avoid useless transition message when new repository is created
    # TODO file upstream bug
    Ganga.Runtime._prog.configure()
    if not os.path.exists(os.path.join(runhereDir,'repository')):
-      from Ganga.Utility.Config import Config
-      os.makedirs(os.path.join(runhereDir,'repository',Config.getConfig("Configuration")['user'],'LocalXML','6.0'))
+      os.makedirs(os.path.join(runhereDir,'repository',Config.getConfig('Configuration')['user'],'LocalXML','6.0'))
    Ganga.Runtime._prog.initEnvironment()
    Ganga.Runtime._prog.bootstrap()
+   if not os.path.exists(Config.getConfig('LGI')['PilotDist']):
+      Ganga.Runtime._prog.logger.error('Pilotjob tarball not found: '+Config.getConfig('LGI')['PilotDist'])
+      Ganga.Runtime._prog.logger.info('  see pilotdist/README.pilot for more information')
+      sys.exit(-1)
    # Import GPI and run Ganga
    from Ganga.GPI import *
    try:

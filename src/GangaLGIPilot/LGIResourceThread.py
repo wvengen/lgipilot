@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-
+import os
 import time
 import LGI
 from Ganga.Utility import Config
@@ -13,6 +13,8 @@ class LGIResourceThread(GangaThread):
 		GangaThread.__init__(self, 'LGI_Resource')
 		self.log = getLogger('LGI.Resource.Thread')
 		config = Config.getConfig('LGI')
+		if not os.path.exists(config['PilotDist']):
+			self.log.error('cannot connect to LGI server: pilotjob tarball not found: '+config['PilotDist'])
 		self.res = LGI.Resource(config['PilotDist'])
 		# number of queued LGI jobs
 		self.queued = None

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import time
 import datetime
 import LGI
@@ -60,6 +61,10 @@ class PilotThread(GangaThread):
 	def __init__(self):
 		GangaThread.__init__(self, 'LGI_Pilot')
 		self.log = getLogger('LGI.Pilot.Thread')
+		if not os.path.exists(config['PilotScript']):
+			self.log.error('pilotjob script not found: '+config['PilotScript'])
+		if not os.path.exists(config['PilotDist']):
+			self.log.error('pilotjob tarball not found: '+config['PilotDist'])
 
 	def run(self):
 		# wait for GPI to become ready (taken from GangaJEM)
