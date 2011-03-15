@@ -79,7 +79,10 @@ class PilotThread(GangaThread):
 		# main pilotjob loop
 		self.nlgijobs = nlgijobs = InterpoList()
 		self.nlgijobs[time.time()-1] = 0
+		curpilotsrun = len(jobs.select(status='running'))
+		curpilotswait = sum([len(jobs.select(status=s)) for s in ['submitted', 'submitting']])
 		self.log.debug('Starting PilotThread main loop')
+		self.log.info('pilotjobs: %d queued, %d running'%(curpilotswait, curpilotsrun))
 		while not self.should_stop():
 			# update historical list of number pilotjobs
 			now = time.time()

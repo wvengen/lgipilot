@@ -37,7 +37,7 @@ class LGIResourceThread(GangaThread):
 				if self.log.isEnabledFor('DEBUG'):
 					self.log.debug('LGI pending work: %s'%(dict(zip([str(x) for x in self.res.getApplications()], work))))
 				if self.queued != totalwork:
-					self.log.info('%d LGI jobs waiting'%totalwork)
+					self.log.info('LGI jobs: %d waiting'%totalwork)
 				self.queued = totalwork
 			except Exception, e:
 				self.log.warn(e)
