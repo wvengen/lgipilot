@@ -3,7 +3,6 @@
 import os
 import time
 import datetime
-import LGI
 from InterpoList import InterpoList
 from Ganga.Utility import Config
 from Ganga.Utility.logging import getLogger
