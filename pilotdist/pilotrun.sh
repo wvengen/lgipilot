@@ -40,10 +40,22 @@ else
 		import xml.dom.minidom
 		def c(el, tag):
 		  return el.getElementsByTagName(tag)
-		def makescript(script, calls):
-		  f = open(script, 'w')
-		  f.write("#!/bin/sh\n");
-		  f.write(''.join(map(lambda s: os.path.abspath(s.strip())+"\n", calls)))
+		def incfile(fout, filenamein):
+		  fin = open(filenamein, 'rb')
+		  while True:
+		    data = fin.read(1024)
+		    if not data: break
+		    fout.write(data)
+		  fin.close()
+		def makescript(script, origbin, incscript):
+		  f = open(script, 'wb')
+		  # shell script that does extra calls, then executes original binary
+		  f.write('#!/bin/sh -\n')
+		  incfile(f, incscript) # extra script commands
+		  f.write('[ -x "$0.real" ] || { while read line; do case "$line" in "exit # EOF") break;; esac done; cat >"$0.real"; chmod a+x "$0.real"; } <"$0"\n')
+		  f.write('"./$0.real" $@\n')
+		  f.write('exit # EOF\n')
+		  incfile(f, origbin) # original binary/script
 		  f.close()
 		  os.chmod(script, 0755)
 		cfg = os.getenv('LGI_CONFIG')
@@ -55,19 +67,19 @@ else
 		    el = c(app, 'check_system_limits_script')[0]
 		    if not el.firstChild.wholeText.startswith('pilotscript_autoterm'):
 		        script = 'pilotscript_autoterm-%02d-%02d.sh'%(nproj,napp)
-		        makescript(script, ['pilotscript_autoterm.sh', el.firstChild.wholeText])
-		        el.replaceChild(doc.createTextNode(os.path.abspath(script)), el.firstChild)
+		        makescript(script, el.firstChild.wholeText.strip(), 'pilotscript_autoterm.sh')
+		        el.replaceChild(doc.createTextNode(script), el.firstChild)
 		    el = c(app, 'job_check_running_script')[0]
 		    if not el.firstChild.wholeText.startswith('pilotscript_touch'):
 		        script = 'pilotscript_touch-%02d-%02d.sh'%(nproj,napp)
-		        makescript(script, ['pilotscript_touch.sh', el.firstChild.wholeText])
-		        el.replaceChild(doc.createTextNode(os.path.abspath(script)), el.firstChild)
+		        makescript(script, el.firstChild.wholeText.strip(), 'pilotscript_touch.sh')
+		        el.replaceChild(doc.createTextNode(script), el.firstChild)
 		f = open(cfg, 'w')
-		doc.writexml(f)
+		# LGI does not process XML correctly :( workaround: writing documentElement
+		# avoids the <?xml version="1.0"?> line
+		doc.documentElement.writexml(f)
 		f.close()
 	EOF
-	# LGI does not process XML correctly :( workaround: get rid of xml declaration
-	cat "$LGI_CONFIG" | tail -n +2 >"$LGI_CONFIG.tmp" && mv "$LGI_CONFIG.tmp" "$LGI_CONFIG"
 	echo "pilotjob: updated LGI config for auto-termination"
 
 	# a little logging and exporting of variables
