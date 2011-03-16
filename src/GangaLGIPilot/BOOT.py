@@ -1,15 +1,15 @@
-import os, sys
+# File: GangaLGIPilot/BOOT.py
 
-from LGIResourceThread import LGIResourceThread
-from PilotThread import PilotThread
-from StatsThread import StatsThread
+from GangaLGIPilot.Lib.LGIResourceThread import LGIResourceThread
+from GangaLGIPilot.Lib.PilotThread import PilotThread
+from GangaLGIPilot.Lib.StatsThread import StatsThread
 
 
 # convenience object to export to GPI
 class LGI:
-	resource = LGIResourceThread()
-	pilot = PilotThread()
-	stats = StatsThread()
+    resource = LGIResourceThread()
+    pilot = PilotThread()
+    stats = StatsThread()
 
 # start threads
 LGI.resource.start()
