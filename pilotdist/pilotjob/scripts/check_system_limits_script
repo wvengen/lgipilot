@@ -1,3 +1,2 @@
 #!/bin/sh
-lgipilot_check_system_limits
 exit 0

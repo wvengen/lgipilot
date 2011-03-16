@@ -25,8 +25,8 @@ Requirements:
    within LGI.
 
 3. Adapt the resource daemon configuration for the grid job.
-   To run the resource daemon on the grid, it needs to be self-contained and a
-   little adapted. This is explained below.
+   To run the resource daemon on the grid, it needs to be self-contained. This
+   is explained below.
 
 4. Run the LGI pilot job manager (lgipilot)
    using the resource daemon tarball just created. See below.

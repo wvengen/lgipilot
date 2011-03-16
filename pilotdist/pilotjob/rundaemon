@@ -3,7 +3,8 @@
 # setup environment for runing
 [ "${LGI_ROOT}" ] || LGI_ROOT="`cd \`dirname $0\` && pwd`"
 [ "${LGI_PID_FILE}" ] || LGI_PID_FILE="${LGI_ROOT}/LGI.pid"
-export LGI_ROOT LGI_PID_FILE
+[ "${LGI_CONFIG}" ] || LGI_CONFIG="${LGI_ROOT}/LGI.cfg"
+export LGI_ROOT LGI_PID_FILE LGI_CONFIG
 PATH="$PATH:${LGI_ROOT}/bin"
 LD_LIBRARY_PATH="${LGI_ROOT}/lib"
 export PATH LD_LIBRARY_PATH
@@ -12,7 +13,7 @@ cd "${LGI_ROOT}"
 
 # run the LGI daemon
 echo Starting the LGI daemon...
-"${LGI_ROOT}/bin/LGI_daemon" ${LGI_OPTIONS} "${LGI_ROOT}/LGI.cfg" &
+"${LGI_ROOT}/bin/LGI_daemon" ${LGI_OPTIONS} "${LGI_CONFIG}" &
 PID=$!
 echo ${PID} >"${LGI_PID_FILE}"
 wait ${PID}
