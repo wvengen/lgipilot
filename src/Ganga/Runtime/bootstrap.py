@@ -145,19 +145,19 @@ under certain conditions; type license() for details.
         parser.add_option("-i", dest="force_interactive", action="store_true",
                           help='enter interactive mode after running script')
 
-        parser.add_option("--webgui", dest="webgui",  action="store_true", default='False',
-                          help='starts web GUI monitoring server')
+        #parser.add_option("--webgui", dest="webgui",  action="store_true", default='False',
+        #                  help='starts web GUI monitoring server')
 
-        parser.add_option('--gui',dest="GUI",action='store_true',default=False,help='Run Ganga in the GUI mode.')
+        #parser.add_option('--gui',dest="GUI",action='store_true',default=False,help='Run Ganga in the GUI mode.')
                 
         parser.add_option("--config", dest="config_file",action="store", metavar="FILE",
-                          help='read user configuration from FILE, overrides the GANGA_CONFIG_FILE environment variable. Default: ~/.gangarc')
+                          help='read user configuration from FILE, overrides the GANGA_CONFIG_FILE environment variable. Default: lgipilot.ini')
         
         parser.add_option("--config-path",dest='config_path',action="store", default=None,
                           help='site/experiment config customization path, overrides the GANGA_CONFIG_PATH environment variable. The relative paths are resolved wrt to the release directory. To use a specific file you should specify the absolute path. Default: None')
 
-        parser.add_option("-g","--generate-config",dest='generate_config',action="store_const",const=1,
-                          help='generate a default config file, backup the existing one')
+        #parser.add_option("-g","--generate-config",dest='generate_config',action="store_const",const=1,
+        #                  help='generate a default config file, backup the existing one')
         
         parser.add_option("-o","--option",dest='cmdline_options',action="append", default=[],metavar='EXPR',
                           help='set configuration options, may be repeated mutiple times,'
@@ -180,15 +180,21 @@ under certain conditions; type license() for details.
                           help='rely on existing environment and do not re-exec ganga process'
                                'to setup runtime plugin modules (affects LD_LIBRARY_PATH)') 
         
-        parser.add_option("--test",dest='TEST',action="store_true", default=False,
-                          help='run Ganga test(s) using internal test-runner. It requires GangaTest package to be installed.'
-                               'Usage example: *ganga --test Ganga/test/MyTestcase* .'
-                               'Refer to [TestingFramework] section in Ganga config for more information on how to configure the test runner.')
+        #parser.add_option("--test",dest='TEST',action="store_true", default=False,
+        #                  help='run Ganga test(s) using internal test-runner. It requires GangaTest package to be installed.'
+        #                       'Usage example: *ganga --test Ganga/test/MyTestcase* .'
+        #                       'Refer to [TestingFramework] section in Ganga config for more information on how to configure the test runner.')
         
         parser.set_defaults(force_interactive=False, config_file=None, force_loglevel=None,rexec=1, prompt=1, generate_config=None)
         parser.disable_interspersed_args()
 
         (self.options, self.args) = parser.parse_args(args=self.argv[1:])
+
+        # workaround disabled options
+        self.options.TEST = False
+        self.options.generate_config = None
+        self.options.webgui = False
+        self.options.GUI = False
 
         def file_opens(f,message):
             try:
@@ -208,9 +214,10 @@ under certain conditions; type license() for details.
            file_opens(self.options.config_file,'reading configuration file')
 
         # we run in the batch mode if a script has been specified and other options (such as -i) do not force it
-        if len(self.args) > 0:
-            if not self.options.force_interactive:
-                    self.interactive = False
+        self.interactive = self.options.force_interactive
+#        if len(self.args) > 0:
+#            if not self.options.force_interactive:
+#                    self.interactive = False
 # Can't check here if the file is readable, because the path isn't known
 #           file_opens(self.args[0],'reading script')
 
