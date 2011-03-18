@@ -41,6 +41,16 @@ _defaultExternalHome = None
 # value specified in the dictionary may be either string or a list of strings (they will be separated by colons ':').
 #
 _externalPackages = {
+   'Optik' : {'version'       : '1.4.1',
+              'noarch':True,
+              'syspath'       : 'lib/python2.2/site-packages',
+              'maxHexVersion' : '0x20300f0'}, #maximum Python version number for adding Optik to path
+   'ipython': {'version' : '0.6.13_ganga_patch1',
+               'noarch':True,
+               'PYTHONPATH' : 'lib/python'},
+   'ApMon' : {'version' : '2.2.11', 
+              'noarch':True,
+              'syspath' : 'python'},
    'subprocess':{'version' : '2.4.2',
                  'syspath' : 'lib/python2.2/site-packages',
                  'maxHexVersion' : '0x20501f0', # in 2.5.0 subprocess is broken, bugfix: http://savannah.cern.ch/bugs/?36178
@@ -49,6 +59,11 @@ _externalPackages = {
               'syspath': 'lib/python2.2/site-packages',
               'maxHexVersion' : '0x20300f0',
               'noarch':True},
+   'paramiko' : {'version' : '1.7.3',
+                 'noarch':True,
+                 'syspath':'lib/python2.3/site-packages'},
+   'pycrypto' : {'version' : '2.0.1',
+                 'syspath':'lib/python2.3/site-packages'},
    'stomputil' : {'version' : '2.3',
                   'noarch': True,
                   'syspath' : 'python'} 

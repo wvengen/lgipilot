@@ -55,8 +55,8 @@ class InterpoList(object):
         # TODO make extrapolation optional
         if i == 0:
             return self.items[0][1]
-	if i == len(self.items):
-	    return self.items[i-1][1]
+        if i == len(self.items):
+            return self.items[i-1][1]
 
         if i == 0 and self.items[0][0] != findex: # or i > len(self.items):
             # refuse to extrapolate

@@ -7,7 +7,6 @@
 #
 # http://www.gnu.org/licenses/gpl.txt
 
-import sys
 import xml.dom.minidom
 import xml2dict
 # support Python2 and Python3
@@ -120,19 +119,19 @@ try:
     import ssl
 
     class _HTTPSConnection(httplib.HTTPConnection):
-            def __init__(self, host, port=443, privateKey=None, certificate=None, caChain=None, sslVersion=ssl.PROTOCOL_SSLv23, certificateRequired=ssl.CERT_REQUIRED, strict=None):
-                   httplib.HTTPConnection.__init__(self, host, port, strict)
-                   self._privateKey = privateKey
-                   self._certificate = certificate
-                   self._caChain = caChain
-                   self._sslVersion = sslVersion
-                   self._certificateRequired = certificateRequired
+        def __init__(self, host, port=443, privateKey=None, certificate=None, caChain=None, sslVersion=ssl.PROTOCOL_SSLv23, certificateRequired=ssl.CERT_REQUIRED, strict=None):
+            httplib.HTTPConnection.__init__(self, host, port, strict)
+            self._privateKey = privateKey
+            self._certificate = certificate
+            self._caChain = caChain
+            self._sslVersion = sslVersion
+            self._certificateRequired = certificateRequired
 
-            def connect(self):
-                   sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                   self.sock = ssl.wrap_socket(sock, keyfile=self._privateKey, certfile=self._certificate, 
-                    ca_certs=self._caChain, ssl_version=self._sslVersion, cert_reqs=self._certificateRequired)
-                   self.sock.connect( (self.host, self.port) )
+        def connect(self):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock = ssl.wrap_socket(sock, keyfile=self._privateKey, certfile=self._certificate, 
+                                        ca_certs=self._caChain, ssl_version=self._sslVersion, cert_reqs=self._certificateRequired)
+            self.sock.connect( (self.host, self.port) )
 
 except ImportError:
     class _HTTPSConnection(httplib.HTTPSConnection):
