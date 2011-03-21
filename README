@@ -63,7 +63,22 @@ in the future.
 The pilot job manager includes parts of Ganga, which has many configuration
 options as well in the same file. Please see comments and Ganga documentation.
 
-
 (*) For production deployments one can use a robot certificate that updates the
     proxy certificate like once a day.
+
+
+* Update pilot job tarball
+
+It may happen that the pilotjob tarball is modified at some point, for example
+to update or add an application. New pilot jobs will run using the updated
+tarball, but old pilot jobs may keep running. And you never know which of the
+running pilot jobs will be executing a new LGI job.
+
+Currently there is only a crude way to make sure that all pilotjobs run the new
+version: killing the old ones. Running LGI jobs will be rescheduled by the LGI
+project server upon timeout, so no jobs will be lost. This is not ideal, but
+currently the only option. One can kill all pilotjobs by invoked lgipilot with
+the command-line option --pilot-cancel. The LGI pilot job manager will
+autoamtically submit new pilotjobs to compensate (which will run the new
+version, of course).
 

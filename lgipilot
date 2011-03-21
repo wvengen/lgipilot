@@ -57,16 +57,25 @@ gangaArgv = [sys.argv[0], '--config=%s'%(os.path.join(exeDir, 'lgipilot.ini')),
              '-o[Logging]_logfile=%s'%(os.path.join(exeDir, 'lgipilot.log')),
              '-o[Configuration]gangadir=%s'%(runhereDir)
             ] + sys.argv[1:]
-hello = '*** Welcome to the LGI Pilot job manager ***'
-
-# hack to use non-interactive as default without script
-if not '-i' in gangaArgv[1:]:
-   gangaArgv.append(os.path.join(exeDir, 'src', 'dummy.py'))
 
 # Process options given at command line and in configuration file(s)
 # Perform environment setup and bootstrap
-Ganga.Runtime._prog = Ganga.Runtime.GangaProgram(hello_string=hello, argv=gangaArgv)
+Ganga.Runtime._prog = Ganga.Runtime.GangaProgram(hello_string='', argv=gangaArgv)
 Ganga.Runtime._prog.parseOptions()
+
+# pilot commands are implemented by scripts
+scripts = []
+if Ganga.Runtime._prog.options.pilot_list:
+    scripts.append(os.path.join(exeDir, 'src', 'pilot_list.py'))
+    Ganga.Runtime._prog.options.cmdline_options.append('[LGI]Enable=False')
+if Ganga.Runtime._prog.options.pilot_cancel:
+    scripts.append(os.path.join(exeDir, 'src', 'pilot_cancel.py'))
+    Ganga.Runtime._prog.options.cmdline_options.append('[LGI]Enable=False')
+# hack to keep Ganga running when not interactive as pilotjob daemon
+if not Ganga.Runtime._prog.interactive and not scripts:
+   scripts.append(os.path.join(exeDir, 'src', 'dummy.py'))
+
+Ganga.Runtime._prog.args = scripts
 
 try:
    from Ganga.Utility.Config import Config

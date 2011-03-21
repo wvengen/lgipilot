@@ -128,7 +128,8 @@ under certain conditions; type license() for details.
         #self.gui_enabled_hack = False
 
     def exit(self,*msg):
-       print >> sys.stderr, self.hello_string
+       if self.hello_string != '':
+           print >> sys.stderr, self.hello_string
        for m in msg:
           print >> sys.stderr,'ganga:',m
        sys.exit(1)
@@ -138,7 +139,8 @@ under certain conditions; type license() for details.
     def parseOptions(self):
         from optparse import OptionParser
 
-        usage = self.hello_string+"""\nusage: %prog [options] [script] [args] ..."""
+        usage = """usage: %prog [options] [script] [args] ..."""
+        if self.hello_string != '': usage = self.hello_string + "\n" + usage
 
         parser = OptionParser(usage,version=_gangaVersion)
 
@@ -184,6 +186,12 @@ under certain conditions; type license() for details.
         #                  help='run Ganga test(s) using internal test-runner. It requires GangaTest package to be installed.'
         #                       'Usage example: *ganga --test Ganga/test/MyTestcase* .'
         #                       'Refer to [TestingFramework] section in Ganga config for more information on how to configure the test runner.')
+        
+        parser.add_option("--pilot-list", dest="pilot_list", action="store_true",
+                          help='List pilotjobs')
+        
+        parser.add_option("--pilot-cancel", dest="pilot_cancel", action="store_true",
+                          help='Cancel all pilotjobs (e.g. after pilotjob tarball update)')
         
         parser.set_defaults(force_interactive=False, config_file=None, force_loglevel=None,rexec=1, prompt=1, generate_config=None)
         parser.disable_interspersed_args()
@@ -332,7 +340,7 @@ under certain conditions; type license() for details.
             pass
         else: # say hello
             if logLevel: self.options.force_loglevel = logLevel
-            if self.options.force_loglevel in (None,'DEBUG'):
+            if self.hello_string!='' and self.options.force_loglevel in (None,'DEBUG'):
                 print >> sys.stderr, self.hello_string
 #                self.new_user_wizard()
 
