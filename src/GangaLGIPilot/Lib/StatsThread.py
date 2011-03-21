@@ -19,10 +19,21 @@ class StatsThread(GangaThread):
 		GangaThread.__init__(self, 'LGI_Stats')
 		self.log = getLogger('LGI.Stats.Thread')
 
+	def start(self):
+		config = Config.getConfig('LGI')
+		if config['StatsInterval'] == 0:
+			self.log.debug('Not starting LGI stats thread because [LGI]StatsInterval is zero')
+			return
+		if not config['StatsFile']:
+			self.log.debug('Not starting LGI stats thread because [LGI]StatsFile is empty')
+			return
+		if config['Enable'] is False:
+			self.log.debug('Not starting LGI stats thread because [LGI]Enable is False')
+			return False
+		return GangaThread.start(self)
+	
 	def run(self):
 		config = Config.getConfig('LGI')
-		if config['StatsInterval'] == 0: return
-		if not config['StatsFile']: return
 
 		# wait for GPI to become ready (taken from GangaJEM)
 		while not self.should_stop():

@@ -37,6 +37,8 @@ config.addOption('StatsFile', 'runhere/stats.csv', 'CSV file to log statistics t
 
 config.addOption('KeepJobs', 168, 'Number of hours after termination to keep pilotjob info (including logs)')
 
+config.addOption('Enable', True, 'Whether to run the LGI threads or not')
+
 
 def submitpilots(n=1, doTerm=True):
 	"""Submit a number of pilotjobs"""
@@ -71,6 +73,12 @@ class PilotThread(GangaThread):
 			self.log.error('pilotjob script not found: '+config['PilotScript'])
 		if not os.path.exists(config['PilotDist']):
 			self.log.error('pilotjob tarball not found: '+config['PilotDist'])
+
+	def start(self):
+		if Config.getConfig('LGI')['Enable'] is False:
+			self.log.debug('Not starting LGI pilot thread because [LGI]Enable is False')
+			return False
+		return GangaThread.start(self)
 
 	def run(self):
 		# wait for GPI to become ready (taken from GangaJEM)

@@ -26,6 +26,12 @@ class LGIResourceThread(GangaThread):
 		# number of queued LGI jobs
 		self.queued = None
 
+	def start(self):
+		if Config.getConfig('LGI')['Enable'] is False:
+			self.log.debug('Not starting LGI resource thread because [LGI]Enable is False')
+			return False
+		return GangaThread.start(self)
+	
 	def run(self):
 		# create connection
 		self.log.info('Connecting to LGI project %s server %s'%(self.res._project, self.res._url))
