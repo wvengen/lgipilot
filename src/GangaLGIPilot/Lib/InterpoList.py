@@ -1,5 +1,6 @@
 """
     InterpoList module (c) Gaz Davidson December 2009.
+    Updated by (c) Willem van Engen 2011
 
     This is a simple interpolated list type useful for graphing, you
     can set values at any index and it will linearly interpolate between
