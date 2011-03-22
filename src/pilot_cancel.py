@@ -8,4 +8,8 @@
 
 from Ganga.GPI import jobs
 
-jobs.kill()
+tocancel = filter(lambda j: j.status in ['submitting', 'submitted', 'running'], jobs)
+if tocancel:
+    for j in tocancel: j.kill()
+else:
+    print "No jobs to cancel"
