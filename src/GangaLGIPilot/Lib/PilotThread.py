@@ -35,6 +35,7 @@ config.addOption('StatsInterval', 0, 'Statistics logging interval, or 0 for no s
 config.addOption('StatsHistory', 60*60, 'Seconds of statistics history to keep')
 config.addOption('StatsFile', 'runhere/stats.csv', 'CSV file to log statistics to, or empty for no statistics')
 
+config.addOption('PidFile', 'runhere/daemon.pid', 'PID file for communicating with the daemon')
 config.addOption('KeepJobs', 168, 'Number of hours after termination to keep pilotjob info (including logs)')
 
 config.addOption('Enable', True, 'Whether to run the LGI threads or not')

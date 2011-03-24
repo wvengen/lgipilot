@@ -19,7 +19,7 @@ from Ganga.GPI import LGI
 if LGI.putpid():
 	atexit.register(LGI.delpid)
 	def pilot_cancel(*args, **kwargs):
-		LGI.pilot.log.info('Received cancel request')
+		LGI.pilot.log.info('Received cancel request (SIGUSR2)')
 		LGI.pilot_cancel()	
 	signal.signal(signal.SIGUSR2, pilot_cancel)
 

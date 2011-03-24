@@ -32,17 +32,18 @@ class LGI:
     def getpid(cls):
         '''Return PID of daemon process, if any'''
         # make sure PID file exists
-        if not os.path.exists(LGI._getpidfilename()):
+        pidfile = Config.getConfig('LGI')['PidFile']
+        if not os.path.exists(pidfile):
             return None
         # get it
-        f = open(LGI._getpidfilename(), 'r')
+        f = open(pidfile, 'r')
         pid = int(f.read())
         f.close()
         # verify it's still running; if not, remove
         try:
             os.kill(pid, 0)
         except OSError:
-            os.unlink(LGI._getpidfilename())
+            os.unlink(pidfile)
             return None
         # ok!
         return pid
@@ -53,7 +54,7 @@ class LGI:
         if LGI.getpid() is not None:
             LGI.pilot.log.warning('daemon already running, not overwriting pid file')
             return False
-        f = open(LGI._getpidfilename(), 'w')
+        f = open(Config.getConfig('LGI')['PidFile'], 'w')
         f.write(str(os.getpid()))
         f.close()
         return True
@@ -61,12 +62,8 @@ class LGI:
 
     def delpid(cls):
         '''Remove current PID file; should only be called at end of daemon process.'''
-        os.unlink(LGI._getpidfilename())
+        os.unlink(Config.getConfig('LGI')['PidFile'])
     delpid = classmethod(delpid)
-
-    def _getpidfilename(cls):
-        return os.path.join(Config.getConfig('Configuration')['gangadir'], 'daemon.pid')
-    _getpidfilename = classmethod(_getpidfilename)
 
 
 # export to GPI
