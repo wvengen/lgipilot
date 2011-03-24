@@ -6,10 +6,19 @@
 #
 # http://www.gnu.org/licenses/gpl.txt
 
-from Ganga.GPI import jobs
+'''LGI pilot job manager cancel script'''
 
-tocancel = filter(lambda j: j.status in ['submitted', 'running'], jobs)
-if tocancel:
-    for j in tocancel: j.kill()
+import os
+import signal
+from Ganga.GPI import LGI
+
+# different behaviour if daemon is running or not
+pid = LGI.getpid()
+if pid is not None:
+    # send signal to daemon
+    os.kill(pid, signal.SIGUSR2)
+    print "Signalled daemon with PID %d"%(pid)
 else:
-    print "No jobs to cancel"
+    # kill directly
+    if LGI.pilot_cancel() == 0:
+        print "No jobs to cancel"
