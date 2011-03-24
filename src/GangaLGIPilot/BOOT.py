@@ -17,11 +17,6 @@ class LGI:
     pilot = PilotThread()
     stats = StatsThread()
 
-# start threads
-LGI.resource.start()
-LGI.pilot.start()
-LGI.stats.start()
-
 # export to GPI
 from Ganga.Runtime.GPIexport import exportToGPI
 exportToGPI('LGI', LGI, 'Objects')

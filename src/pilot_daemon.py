@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 #
 # Copyright (C) 2011 W. van Engen, Stichting FOM, The Netherlands
 #
@@ -7,8 +6,18 @@
 #
 # http://www.gnu.org/licenses/gpl.txt
 
-import time
+'''LGI pilot job manager daemon script'''
 
-while True:
+import time
+import Ganga.Runtime
+from Ganga.GPI import LGI
+
+# start LGI pilot job manager threads
+LGI.resource.start()
+LGI.pilot.start()
+LGI.stats.start()
+
+# and wait forever in batch mode
+while not Ganga.Runtime._prog.interactive:
 	time.sleep(60)
 

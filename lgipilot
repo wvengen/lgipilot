@@ -60,43 +60,38 @@ gangaArgv = [sys.argv[0], '--config=%s'%(os.path.join(exeDir, 'lgipilot.ini')),
 
 # Process options given at command line and in configuration file(s)
 # Perform environment setup and bootstrap
-Ganga.Runtime._prog = Ganga.Runtime.GangaProgram(hello_string='', argv=gangaArgv)
-Ganga.Runtime._prog.parseOptions()
+Ganga.Runtime._prog = prog = Ganga.Runtime.GangaProgram(hello_string='', argv=gangaArgv)
+prog.parseOptions()
 
 # pilot commands are implemented by scripts
-scripts = []
-if Ganga.Runtime._prog.options.pilot_list:
-    scripts.append(os.path.join(exeDir, 'src', 'pilot_list.py'))
-    Ganga.Runtime._prog.options.cmdline_options.append('[LGI]Enable=False')
-if Ganga.Runtime._prog.options.pilot_cancel:
-    scripts.append(os.path.join(exeDir, 'src', 'pilot_cancel.py'))
-    Ganga.Runtime._prog.options.cmdline_options.append('[LGI]Enable=False')
-# hack to keep Ganga running when not interactive as pilotjob daemon
-if not Ganga.Runtime._prog.interactive and not scripts:
-   scripts.append(os.path.join(exeDir, 'src', 'dummy.py'))
-
-Ganga.Runtime._prog.args = scripts
+if prog.options.pilot_list:
+    prog.args.append(os.path.join(exeDir, 'src', 'pilot_list.py'))
+if prog.options.pilot_cancel:
+    prog.args.append(os.path.join(exeDir, 'src', 'pilot_cancel.py'))
+# without any scripts on the command-line, start the daemon
+if not prog.args:
+   prog.args.append(os.path.join(exeDir, 'src', 'pilot_daemon.py'))
 
 try:
    from Ganga.Utility.Config import Config
    # avoid useless transition message when new repository is created
    # TODO file upstream bug
-   Ganga.Runtime._prog.configure()
+   prog.configure()
    if not os.path.exists(os.path.join(runhereDir,'repository')):
       os.makedirs(os.path.join(runhereDir,'repository',Config.getConfig('Configuration')['user'],'LocalXML','6.0'))
-   Ganga.Runtime._prog.initEnvironment()
-   Ganga.Runtime._prog.bootstrap()
+   prog.initEnvironment()
+   prog.bootstrap()
    if not os.path.exists(Config.getConfig('LGI')['PilotDist']):
-      Ganga.Runtime._prog.logger.error('Pilotjob tarball not found: '+Config.getConfig('LGI')['PilotDist'])
-      Ganga.Runtime._prog.logger.info('  see pilotdist/README.pilot for more information')
+      prog.logger.error('Pilotjob tarball not found: '+Config.getConfig('LGI')['PilotDist'])
+      prog.logger.info('  see pilotdist/README.pilot for more information')
       sys.exit(-1)
    # Import GPI and run Ganga
    from Ganga.GPI import *
    try:
-      Ganga.Runtime._prog.run()
+      prog.run()
    except KeyboardInterrupt:
-      Ganga.Runtime._prog.logger.info('Terminated by keyboard interrupt')
+      prog.logger.info('Terminated by keyboard interrupt')
       pass
 except GangaException,x:
-   Ganga.Runtime._prog.log(x)
+   prog.log(x)
    sys.exit(-1)
