@@ -1,2 +1,12 @@
+20110331 version 0.2
+* allow to list and cancel pilot jobs
+* update Ganga to 5.5.25
+* lots of cleanups and small fixes
+* new option to specify maximum pilot job run time
+* better error handling in various places
+* fix create_package checks
+* work with LGI project servers before and after 1.29
+* allow to omit port in LGI url
+
 20110303 version 0.1
-* Initial release
+* initial release
