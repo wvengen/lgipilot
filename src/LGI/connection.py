@@ -49,7 +49,7 @@ class Connection:
                 # XXX still bails if username/password present
                 if dURL[1].find(':') < 0:
                     self._host = dURL[1]
-                    self._port = None
+                    self._port = 443
                 else:
                     (self._host, self._port) = dURL[1].split(':', 1)
                     self._port = int(self._port)
