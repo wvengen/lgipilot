@@ -340,8 +340,9 @@ under certain conditions; type license() for details.
             pass
         else: # say hello
             if logLevel: self.options.force_loglevel = logLevel
-            if self.hello_string!='' and self.options.force_loglevel in (None,'DEBUG'):
-                print >> sys.stderr, self.hello_string
+            if self.options.force_loglevel in (None,'DEBUG'):
+                if self.hello_string!='':
+                    print >> sys.stderr, self.hello_string
 #                self.new_user_wizard()
 
         if self.options.config_file is None:
