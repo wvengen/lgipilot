@@ -76,7 +76,7 @@ class LGIResourceThread(GangaThread):
 			return self.__workForApp2(app, None)
 
 	def __workForApp2(self, app, limit):
-		resp = self.res.requestWork(app, limit)
+		resp = self.res.requestWork(app, limit=limit)
 		# error handling
 		if not 'number_of_jobs' in resp:
 			raise LGI.LGIException('Malformed LGI response: %s'%str(resp))
