@@ -175,6 +175,9 @@ under certain conditions; type license() for details.
         parser.add_option("--debug",dest="force_loglevel",action="store_const",const='DEBUG',
                           help='all messages including DEBUG are printed')
         
+        parser.add_option("--no-mon",dest='monitoring',action="store_const",const=0,
+                          help='disable the monitoring loop (useful if you run multiple Ganga sessions)')
+
         parser.add_option("--no-prompt",dest='prompt',action="store_const",const=0,
                           help='never prompt interactively for anything except IPython (FIXME: this is not fully implemented)')
         
@@ -193,7 +196,7 @@ under certain conditions; type license() for details.
         parser.add_option("--pilot-cancel", dest="pilot_cancel", action="store_true",
                           help='Cancel all pilotjobs (e.g. after pilotjob tarball update)')
         
-        parser.set_defaults(force_interactive=False, config_file=None, force_loglevel=None,rexec=1, prompt=1, generate_config=None)
+        parser.set_defaults(force_interactive=False, config_file=None, force_loglevel=None,rexec=1, monitoring=1, prompt=1, generate_config=None)
         parser.disable_interspersed_args()
 
         (self.options, self.args) = parser.parse_args(args=self.argv[1:])
@@ -493,6 +496,8 @@ If ANSI text colours are enabled, then individual colours may be specified like 
         # activate the logging subsystem
         Ganga.Utility.logging.bootstrap() # user defined log level takes effect NOW
 
+        if not self.options.monitoring:
+            self.options.cmdline_options.append('[PollThread]autostart=False')
         self.logger = Ganga.Utility.logging.getLogger(modulename=True)
         self.logger.debug('default user name is %s',config['user'])
         self.logger.debug('user specified cmdline_options: %s',str(self.options.cmdline_options))
@@ -774,6 +779,7 @@ default_backends = LCG
         # bootstrap runtime modules
         import Ganga.GPIDev.Lib.Registry
         from Ganga.GPIDev.Lib.JobTree import JobTree,TreeError
+        import Ganga.GPIDev.Lib.Tasks 
 
         # boostrap the repositories and connect to them
         for n,k,d in Repository_runtime.bootstrap():
