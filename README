@@ -77,8 +77,7 @@ running pilot jobs will be executing a new LGI job.
 Currently there is only a crude way to make sure that all pilotjobs run the new
 version: killing the old ones. Running LGI jobs will be rescheduled by the LGI
 project server upon timeout, so no jobs will be lost. This is not ideal, but
-currently the only option. One can kill all pilotjobs by invoked lgipilot with
+currently the only option. One can kill all pilotjobs invoked by lgipilot with
 the command-line option --pilot-cancel. The LGI pilot job manager will
-autoamtically submit new pilotjobs to compensate (which will run the new
-version, of course).
+automatically submit new pilotjobs to compensate (running the new version).
 
