@@ -22,15 +22,33 @@ class LGIResourceException(LGIException):
     pass
 
 class Resource(Connection):
-    '''LGI connection for resources. This is a thin layer: each command just
-    returns the server's /LGI/response/* parsed into a dict, unless otherwise
-    mentioned.'''
+    '''LGI connection for resources.
+
+    This is a thin layer: each command just returns the server's
+    /LGI/response/* parsed into a dict, unless otherwise mentioned.
+    '''
 
     def __init__(self, urlOrCfg, project=None, certificate=None, privateKey=None, caChain=None):
-        '''Initialize resource, either by specifying all components or by only giving
-        the first parameter pointing to a resource daemon configuration file. Instead of
-        a resource daemon configuration file, it can also point to a tarball containing
-        LGI.cfg as resource daemon configuration file and certificates.'''
+        '''Initialize resource.
+
+        This is done either by specifying all components or by only giving the
+        first parameter pointing to a resource daemon configuration file.
+        Instead of a resource daemon configuration file, it can also point to a
+        tarball containing LGI.cfg as resource daemon configuration file and
+        certificates.
+
+        @type urlOrCfg str
+        @param urlOrCfg location of configuration file, or LGI project server url
+        @type project str
+        @param project LGI project to work with
+        @type certificate str
+        @param certificate location of user certificate file
+        @type privateKey str
+        @param privateKey location of user private key file
+        @type caChain str
+        @param caChain location of CA chain to validate LGI project server with
+        '''
+
         self._apps = None
         self._sessionId = None
         self._tmpdir = None
@@ -44,12 +62,18 @@ class Resource(Connection):
                 self.parseConfig(urlOrCfg)
 
     def parseConfig(self, LGIconf, reldir=None):
-        '''Load info from resource daemon configuration file. If reldir is
-        given, relative file paths for certificates are resolved to this
-        directory. If reldir is None and LGIconf is a filename, reldir is
-        assumed to be the dirname of LGIconf. If reldir is None and LGIconf 
-        is a file object, relative paths are retained.'''
-
+        '''Load configuration from resource daemon configuration file.
+        
+        If reldir is given, relative file paths for certificates are resolved
+        to this directory. If reldir is None and LGIconf is a filename, reldir
+        is assumed to be the dirname of LGIconf. If reldir is None and LGIconf
+        is a file object, relative paths are retained.
+        
+        @type LGIconf str
+        @param LGIconf path to LGI.cfg
+        @type reldir str
+        @param reldir optional directory to resolve relative pathnames to
+        '''
         if LGIconf is None: return
 
         conf = xml2dict.xml2dict(xml.dom.minidom.parse(LGIconf))
@@ -83,10 +107,18 @@ class Resource(Connection):
         self.setApplications(apps)
 
     def parseTarball(self, tarball, cfg='LGI.cfg'):
-        '''Parse configuration from a tarball containing a resource daemon
+        '''Load configuration from resource daemon tarball.
+
+        Parses configuration from a tarball containing a resource daemon
         configuration file and certificates. This extracts the certificates as
         temporary files to be used for authentication, which are removed upon
-        deletion of this object.'''
+        deletion of this object.
+
+        @type tarball str
+        @param tarball location of resource daemon tarball
+        @type cfg str
+        @param cfg location of resource daemon configuration file in tarball
+        '''
         dist = tarfile.open(tarball, 'r')
         # get info from config
         fileprefix = ''
@@ -147,11 +179,21 @@ class Resource(Connection):
             os.remove(filename)
 
     def setApplications(self, apps):
-        '''set the applications supported; no more than getter/setter right now.'''
+        '''Set the applications supported.
+        
+        No more than getter/setter right now.
+        
+        @type apps list(str)
+        @param apps list of applications to advertise with
+        '''
         self._apps = apps
 
     def getApplications(self):
-        '''return the applications supported'''
+        '''return the applications supported
+        
+        @rtype list(str)
+        @return applications advertised
+        '''
         return self._apps
 
     def connect(self):
@@ -161,7 +203,19 @@ class Resource(Connection):
             self.signup()
 
     def requestWork(self, application, start = None, limit = None):
-        '''request list of work from project server, also obtains job locks'''
+        '''Request list of work from project server.
+        
+        This also obtains job locks.
+        
+        @type application str
+        @param application application to request work for
+        @type start int
+        @param start start index to retrieve
+        @type limit int
+        @param limit maximum number of items to return
+        @rtype dict
+        @return parsed xml response
+        '''
         self._ensureConnection()
         args = { 'project': self._project, 'session_id': self._sessionId }
         args['application'] = application
@@ -174,21 +228,39 @@ class Resource(Connection):
         return ret
 
     def lockJob(self, jobId):
-        '''Lock a job'''
+        '''Lock a job.
+        
+        @type jobId int
+        @param jobId job to lock
+        @rtype dict
+        @return parsed xml response
+        '''
         self._ensureConnection()
         ret = self._postToServer("/resources/resource_lock_job.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
         return ret['LGI']['response']
 
     def unlockJob(self, jobId):
-        '''Unlock a job'''
+        '''Unlock a job.
+        
+        @type jobId int
+        @param jobId job to unlock
+        @rtype dict
+        @return parsed xml response
+        '''
         self._ensureConnection()
         ret = self._postToServer("/resources/resource_unlock_job.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
         return ret['LGI']['response']
 
     def jobState(self, jobId):
-        '''Request the job status of a job'''
+        '''Request the job status of a job.
+        
+        @type jobId int
+        @param jobId job to request status of
+        @rtype dict
+        @return parsed xml response
+        '''
         self._ensureConnection()
         ret = self._postToServer("/resources/resource_job_state.php", {
             'project': self._project, 'session_id': self._sessionId, 'job_id': jobId })
@@ -201,21 +273,25 @@ class Resource(Connection):
         Connection.close(self)
 
     def signup(self):
-        '''signup resource with server
-        @return sessionid obtained'''
+        '''Signup resource with server.
+        @rtype str
+        @return sessionid obtained
+        '''
         ret = self._postToServer("/resources/resource_signup_resource.php", { 'project': self._project })
         self._sessionId = ret['LGI']['response']['session_id']
         return ret
 
     def signoff(self):
-        '''signoff resource from server'''
+        '''Signoff resource from server.
+        @return server response
+        '''
         ret = self._postToServer("/resources/resource_signoff_resource.php", {
             'project': self._project, 'session_id': self._sessionId })
         self._sessionId = None
         return ret
 
     def _ensureConnection(self):
-        '''make sure a connection is present and the resource is signed up'''
+        '''Make sure a connection is present and the resource is signed up'''
         if self._connection is None:
             self.connect()
         if self._sessionId is None:

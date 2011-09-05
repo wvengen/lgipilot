@@ -15,8 +15,11 @@ except ImportError: import urlparse
 try: import http.client as httplib
 except ImportError: import httplib
 
+
 class LGIException(Exception):
+    '''Base LGI exception'''
     pass
+
 
 class LGIServerException(LGIException):
     '''Server exception; with response property'''
@@ -24,10 +27,25 @@ class LGIServerException(LGIException):
         LGIException.__init__(self, msg)
         self.response = response
 
-class Connection:
-    '''Base class for communication to an LGI server. This takes care of
-    authentication, posting variables and common xml parsing.'''
 
+class Connection:
+    '''Base class for communication with an LGI server. This takes care of
+    authentication, posting variables and common xml parsing. Also includes
+    access to the standard repository.'''
+
+    '''Create a new LGI connection.
+
+    @type url str
+    @param url LGI project server's base url
+    @type project str
+    @param project LGI project name to work with
+    @type certificate str
+    @param certificate location of user certificate file
+    @type privateKey str
+    @param privateKey location of user private key file
+    @type caChain str
+    @param caChain location of CA chain to validate LGI project server with
+    '''
     def __init__(self, url, project, certificate, privateKey, caChain):
         self._connection = None
         self._host = None
@@ -38,8 +56,12 @@ class Connection:
         self._caChain = caChain
 
     def connect(self):
-        '''Connect to the LGI project server. Must be called before
-        any other communication is done.'''
+        '''Connect to the LGI project server.
+
+        Will be called before any other communication is done.
+
+        @raise LGIException when base url is invalid
+        '''
         if self._host is None:
             dURL = urlparse.urlparse(self._url)
 
@@ -64,9 +86,22 @@ class Connection:
             self._connection.close()
             self._connection = None
 
-    def _postToServer(self, apipath, variables={}, files={}, path=None):
-        '''Send a request to the LGI server'''
+    def _postToServer(self, url, variables={}, files={}):
+        '''Send a request to the LGI server.
+
+        @type url str
+        @param url to post, relative to base url or absolute when starting with "https:"
+        @type variables dict(str)
+        @param variables key->value pairs to POST
+        @type files dict(dict(str))
+        @param files files to upload key->(filename_sent,local_filename)
+        @rtype dict
+        @return Dictionary of parsed XML response
+        @raise LGIServerException when the project server returned an error response
+        '''
         if self._connection is None: self.connect()
+        # relative to base url
+        if not url.lower().startswith('https:'): url = self._url + url
 
         boundary = "@$_Th1s_1s_th3_b0und@ry_@$"
         data = []
@@ -93,16 +128,15 @@ class Connection:
                 "Accept": "text/plain",
                 "Connection": "keep-alive" }
 
-        if path is None: path = self._path + apipath
         try:
-            self._connection.request("POST", path, body, headers)
+            self._connection.request("POST", url, body, headers)
             response = self._connection.getresponse()
         except httplib.HTTPException:
             # silently reconnect if connection re-use comes to its limit
             # TODO use urllib2 for more intelligent retries
             self._connection.close()
             self._connection.connect()
-            self._connection.request("POST", path, body, headers)
+            self._connection.request("POST", url, body, headers)
             response = self._connection.getresponse()
     
         rdata = response.read()

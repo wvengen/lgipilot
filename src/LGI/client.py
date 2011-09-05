@@ -14,12 +14,34 @@ from connection import Connection, LGIException
 
 
 class LGIClientException(LGIException):
+    '''LGI client exception'''
     pass
 
+
 class Client(Connection):
+    '''Client for the interface interface of the LGI project server.'''
 
     def __init__(self, url=None, project=None, user=None, groups=None, certificate=None, privateKey=None, caChain=None):
-        '''initialize LGI client connection with parameters or defaults read from ~/.LGI'''
+        '''Initialize LGI client connection.
+
+        Configuration can be supplied as parameters, or else defaults will
+        be read from ~/.LGI .
+
+        @type url str
+        @param url LGI project server url to work with
+        @type project str
+        @param project LGI project to work with
+        @type user str
+        @param user LGI username
+        @type groups str
+        @param groups LGI groups
+        @type certificate str
+        @param certificate location of user certificate file
+        @type privateKey str
+        @param privateKey location of user private key file
+        @type caChain str
+        @param caChain location of CA chain to validate LGI project server with
+        '''
         Connection.__init__(self, url, project, certificate, privateKey, caChain)
         self._user = user
         self._groups = groups
@@ -39,7 +61,13 @@ class Client(Connection):
             self._caChain= os.path.join(os.getenv("HOME"), '.LGI', 'ca_chain')
 
     def jobState(self, jobId):
-        '''request state of job'''
+        '''Request state of job.
+
+        @type jobId int
+        @param jobId job id to query
+        @rtype dict
+        @return parsed project server response
+        '''
         args =  {'project': self._project,
                  'user': self._user,
                  'groups': self._groups}
@@ -48,7 +76,19 @@ class Client(Connection):
         return ret['LGI']['response']
 
     def jobList(self, application=None, state=None, start=None, limit=None):
-        '''retrieve list of jobs'''
+        '''Retrieve list of jobs.
+
+        @type application str
+        @param application application to restrict to, or None for all applications
+        @type state str
+        @param state state to restrict to, or None for all states
+        @type start int
+        @param start start listing at this index
+        @type limit int
+        @param limit maximum number of jobs to return
+        @rtype dict
+        @return parsed project server response
+        '''
         args = {'project': self._project,
                 'user': self._user,
                 'groups': self._groups}
@@ -62,7 +102,13 @@ class Client(Connection):
         return ret
 
     def jobDelete(self, jobId):
-        '''delete a job'''
+        '''Delete a job.
+
+        @type jobId int
+        @param jobId job id to delete
+        @rtype dict
+        @return parsed project server response
+        '''
         args =  {'project': self._project,
                  'user': self._user,
                  'groups': self._groups}
@@ -70,8 +116,26 @@ class Client(Connection):
         ret = self._postToServer("/interfaces/interface_delete_job.php", args)
         return ret['LGI']['response']
 
-    def jobSubmit(self, application, targetResources="any", input_=None, jobSpecifics=None, writeAccess=None, readAccess=None, files=[]):
-        '''submit a job for given application and options'''
+    def jobSubmit(self, application, input_=None, targetResources="any", jobSpecifics=None, writeAccess=None, readAccess=None, files=[]):
+        '''Submit a job.
+
+        @type application str
+        @param application application to submit to
+        @type input_ str
+        @param input_ input for job
+        @type targetResources str
+        @param targetResources comma-separated list of target_resources to submit to, or 'any'
+        @type jobSpecifics str
+        @param jobSpecifics job_specifics
+        @type writeAccess str
+        @param writeAccess comma-separated list of people to give write access
+        @type readAccess str
+        @param readAccess comma-separated list of people to give read access
+        @type files list(str)
+        @param files paths of files to upload 
+        @rtype dict
+        @return parsed project server response
+        '''
         args = {'project': self._project,
                 'user': self._user,
                 'groups': self._groups,
@@ -91,7 +155,10 @@ class Client(Connection):
         return ret['LGI']['response']
 
     def resourceList(self):
-        '''retrieve resource list'''
+        '''Retrieve resource list.
+        @rtype dict
+        @return parsed project server response
+        '''
         ret = self._postToServer("/interfaces/interface_project_resource_list.php", {
                 'project': self._project,
                 'user': self._user,
@@ -99,7 +166,10 @@ class Client(Connection):
         return ret['LGI']['response']
 
     def serverList(self):
-        '''retrieve project server list'''
+        '''Retrieve project server list.
+        @type dict
+        @return parsed project server response
+        '''
         ret = self._postToServer("/interfaces/interface_project_server_list.php", {
                 'project': self._project,
                 'user': self._user,
@@ -107,7 +177,7 @@ class Client(Connection):
         return ret['LGI']['response']
 
     def __readConfig(self, filename):
-        '''return contents of configuration file relative to directory ~/.LGI'''
+        '''Return contents of configuration file relative to directory ~/.LGI .'''
         f = open(os.path.join(os.getenv('HOME'), '.LGI', filename), "r");
         data = f.read()
         f.close()
