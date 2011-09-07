@@ -141,9 +141,93 @@ class Connection:
     
         rdata = response.read()
         resp = xml2dict.xml2dict(xml.dom.minidom.parseString(rdata))
-        if 'error' in resp['LGI']['response']:
+        if 'LGI' in resp and 'response' in resp['LGI'] and 'error' in resp['LGI']['response']:
             error = resp['LGI']['response']['error']
             raise LGIServerException('LGI error %d: %s'%(error['number'], error['message']), resp)
+        return resp
+
+    def fileList(self, url):
+        '''Return list of files in repository.
+        @type url str
+        @param url absolute repository location
+        @rtype list(dict())
+        @return list of properties of filenames
+        '''
+        if self._connection is None: self.connect()
+        repourl, repodir, repoid = url.rsplit('/', 2)
+        ret = self._postToServer(repourl + "/repository_content.php", {'repository': repoid})
+        ret = ret['repository_content']
+        if not 'file' in ret: ret['file'] = None
+        if type(ret['file']) != list: ret['file'] = [ ret['file'] ]
+        return ret['file']
+
+    def fileDownload(self, url):
+        '''Download a file from a repository.
+        @type url str
+        @param url absolute url of file
+        @rtype str
+        @return contents of the file
+        '''
+        try:
+            self._connection.request("GET", url)
+            response = self._connection.getresponse()
+        except httplib.HTTPException:
+            # silently reconnect if connection re-use comes to its limit
+            # TODO use urllib2 for more intelligent retries
+            self._connection.close()
+            self._connection.connect()
+            self._connection.request("GET", url)
+            response = self._connection.getresponse()
+        return response.read()
+
+    def fileUpload(self, url, data):
+        '''Upload a file to a repository.
+        @type url str
+        @param url destination location, repository with filename appended
+        @type data str
+        @param data file data to upload
+        @rtype dict
+        @return parsed server response
+        @raise LGIServerException when the project server returned an error status
+        '''
+        try:
+            self._connection.request("PUT", url, data)
+            response = self._connection.getresponse()
+        except httplib.HTTPException:
+            # silently reconnect if connection re-use comes to its limit
+            # TODO use urllib2 for more intelligent retries
+            self._connection.close()
+            self._connection.connect()
+            self._connection.request("PUT", url, data)
+            response = self._connection.getresponse()
+        resp = xml2dict.xml2dict(xml.dom.minidom.parseString(response.read()))
+        if 'status' in resp and 'number' in resp['status'] and int(resp['status']['number'])>=400:
+            status=resp['status']
+            raise LGIServerException('LGI error status %d: %s'%(status['number'], status['message']), resp)
+        return resp
+
+    def fileDelete(self, url):
+        '''Remove a file from a repository.
+        @type url str
+        @param url location to remote, repository with filename appended
+        @rtype dict
+        @return parsed server response
+        @raise LGIServerException when the project server returned an error status
+        '''
+        try:
+            self._connection.request("DELETE", url)
+            response = self._connection.getresponse()
+        except httplib.HTTPException:
+            # silently reconnect if connection re-use comes to its limit
+            # TODO use urllib2 for more intelligent retries
+            self._connection.close()
+            self._connection.connect()
+            self._connection.request("DELETE", url)
+            response = self._connection.getresponse()
+        resp = xml2dict.xml2dict(xml.dom.minidom.parseString(response.read()))
+        if 'status' in resp and 'number' in resp['status'] and int(resp['status']['number'])>=400:
+            status=resp['status']
+            raise LGIServerException('LGI error status %d: %s'%(status['number'], status['message']), resp)
         return resp
 
 

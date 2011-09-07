@@ -13,8 +13,18 @@ class __NotATextNode( Exception ):
 	pass
 
 def xml2dict( Node ):
-	'''Convert dom to nested dict. Attributes are discarded. If multiple
-	nodes of the same name are present, it will become a list of nodes.'''
+	'''Convert dom to nested dict.
+
+	Attributes are converted to elements. If multiple nodes of the same
+	name are present, it will become a list of nodes.
+
+	The contents of nodes named 'input' or 'output' is un-hexbin-ed
+
+	@type Node xml.dom.minidom
+	@param Node DOM to convert
+	@rtype dict
+	@return nested dict with the contents of the DOM as dict or str
+	'''
 	Counts = {}
 	Dict = {}
 
@@ -29,6 +39,14 @@ def xml2dict( Node ):
 			Dict[ NodeName ] = []
 		else:
 			Counts[ NodeName ] = 1
+	if Node.attributes:
+		for a in Node.attributes.keys():
+			if a in Counts.keys():
+				Counts[ a ] = Counts[ a ] + 1
+				Dict [ a ] = [ Node.attributes[a].value ]
+			else:
+				Counts[ a ] = 1
+				Dict [ a ] = Node.attributes[a].value
 	
 	for n in Node.childNodes:
 		if n.nodeType != n.ELEMENT_NODE:
