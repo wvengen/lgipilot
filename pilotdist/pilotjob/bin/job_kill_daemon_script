@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# daemon kill script
+#
+#    this can be run as an LGI application to terminate the resource daemon
+#    make sure to limit access to members of the admin group only
+#
+if [ ! "${LGI_PID_FILE}" ]; then
+	echo "No LGI PID file defined, please set LGI_PID_FILE first" 1>&2
+	exit 1
+fi
+if [ ! -e "${LGI_PID_FILE}" ]; then
+	echo "Could not read LGI PID file: ${LGI_PID_FILE}" 1>&2
+	exit 1
+fi
+
+# SIGHUP should be enough to terminate after this job is finished
+kill -1 `cat "${LGI_PID_FILE}"`
+
+exit 0
