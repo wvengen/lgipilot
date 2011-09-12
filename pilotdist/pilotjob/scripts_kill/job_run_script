@@ -1,0 +1,27 @@
+#!/bin/sh
+echo $$ > running
+
+error() {
+	echo $@ >>LGI_output
+	echo $@ 1>&2
+}
+
+errorpipe() {
+	tee -a LGI_output
+}
+
+if [ ! "${LGI_PID_FILE}" ]; then
+	error "No LGI PID file defined, please set LGI_PID_FILE first"
+	exit 1
+fi
+if [ ! -e "${LGI_PID_FILE}" ]; then
+	error "Could not read LGI PID file: ${LGI_PID_FILE}"
+	exit 1
+fi
+
+PID=`cat "${LGI_PID_FILE}"`
+echo "Killing resource daemon pid ${PID}" >>LGI_output
+kill -QUIT `cat "${LGI_PID_FILE}"` 2>&1 | errorpipe 1>&2 && echo "Signal sent" >>LGI_output
+
+touch finished
+rm running
