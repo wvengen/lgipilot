@@ -70,3 +70,20 @@ being updated.
 If this all happens correctly, the pilot job manager should be able to do its
 job properly. If not, you'll need to troubleshoot this first.
 
+
+* Pilot job management
+
+The pilot job directory supplied contains a manage application. This allows
+an administrator to have basic interaction with pilotjobs. The script
+jobs_manage/job_run_script contains the logic. Jobs submitted to the 'manage'
+application using the 'admin' group can put a command in the input:
+
+  :kill            to gracefully shutdown the pilotjob
+  :env             to return the environment
+  :log             to return the last portion of the log file
+  :id              to retrieve the md5 sum of the pilotjob.tar.gz tarball
+
+There is currently no way to select a specific pilotjob, but that may be
+part of a future version. For now this mechanism is used mostly to terminate
+pilotjobs.
+
