@@ -18,14 +18,11 @@ LGI_OPTIONS='-ft 5 -st 10'
 
 # setup auto-termination environment
 LGI_ROOT="`pwd`"
-LGI_RUNNING_STAMP="${LGI_ROOT}/running_stamp"
-LGI_START_STAMP="${LGI_ROOT}/start_stamp"
-LGI_PID_FILE="${LGI_ROOT}/LGI.pid"
 LGI_IS_PILOTJOB=1
-date +%s >"${LGI_RUNNING_STAMP}"
-date +%s >"${LGI_START_STAMP}"
-export LGI_OPTIONS LGI_ROOT LGI_RUNNING_STAMP LGI_START_STAMP LGI_PID_FILE LGI_IS_PILOTJOB
 
+export LGI_OPTIONS LGI_ROOT LGI_IS_PILOTJOB
+
+# some logging
 env | grep '^LGI_\|^SCHED_'
 
 if [ "${SCHED_WAIT_TERM}" ]; then

@@ -1,0 +1,64 @@
+#!/bin/sh
+echo $$ > running
+
+PID=`cat "${LGI_PID_FILE}"`
+
+cmd_kill() {
+	echo ":kill:preparing to terminate"
+	touch "${LGI_TERMINATE_FLAG}"
+}
+
+cmd_log() {
+	n=20
+	if [ ! "${LGI_LOG_FILE}" -o ! -e "${LGI_LOG_FILE}" ]; then
+		echo ":log:error:log file cannot be read:${LGI_LOG_FILE}"
+		return
+	fi
+	tail -n "$n" "${LGI_LOG_FILE}" | sed 's|^|:log:line:|'
+}
+
+cmd_env() {
+	env | sed 's|^|:env:line:|'
+}
+
+cmd_id() {
+	# only works for real pilotjob
+	TARBALL="${LGI_ROOT}/pilotjob.tar.gz"
+	[ ! -e "${TARBALL}" ] && TARBALL="${LGI_ROOT}/../pilotjob.tar.gz"
+	if [ ! -e "${TARBALL}" ]; then
+		echo ":id:error:pilotjob.tar.gz not found"
+		return
+	fi
+	openssl md5 "${TARBALL}" | sed 's|^MD5.*=\s*||; s|^|:id:md5:pilotjob.tar.gz:|'
+}
+
+cmd_unknown() {
+	echo ":$1:unknown command"
+}
+
+# LGI job input provides command to run (single for now)
+OLD_IFS="${IFS}"
+IFS=\n
+(
+	echo ":pid:${PID}"
+
+	while read line; do
+		IFS="${OLD_IFS}"
+		cmd=`echo "$line" | sed 's|^\s*:\([^:]\+\)\s*\(:.*\)\?$|\1|p;d'`
+		[ "$cmd" ] || continue
+		args=`echo "$line" | sed 's|^\s*:\([^:]\+\)\s*\(:\(.*\)\)\?$|\3|p;d'`
+		case $cmd in
+		kill)	cmd_kill ;;
+		log)	cmd_log ;;
+		env)	cmd_env ;;
+		id)	cmd_id ;;
+		*)	cmd_unknown ;;
+		esac
+		IFS=\n
+	done
+) <LGI_input >LGI_output
+IFS="${OLD_IFS}"
+
+
+touch finished
+rm running

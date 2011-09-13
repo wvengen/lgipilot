@@ -1,9 +1,15 @@
 #!/bin/sh
-[ "${LGI_IS_PILOTJOB}" ] || exit 0
 NOW=`date +%s`
 
+# kill daemon when kill application created flag
+if [ "${LGI_TERMINATE_FLAG}" -a -e "${LGI_TERMINATE_FLAG}" ]; then
+	echo "pilotjob: killing daemon upon request"
+	rm -f "${LGI_TERMINATE_FLAG}"
+	kill `cat "${LGI_PID_FILE}"`
+fi
+
 # kill daemon when idle time exceeds predefined value
-if [ -e "${LGI_RUNNING_STAMP}" -a "${SCHED_WAIT_TERM}" ]; then
+if [ "${LGI_RUNNING_STAMP}" -a -e "${LGI_RUNNING_STAMP}" -a "${SCHED_WAIT_TERM}" ]; then
 	LASTRUNNING=`cat "${LGI_RUNNING_STAMP}"`
 	DIFF=`expr "${NOW}" - "${LASTRUNNING}"`
 	if [ ${DIFF} -ge ${SCHED_WAIT_TERM} ]; then
@@ -13,7 +19,7 @@ if [ -e "${LGI_RUNNING_STAMP}" -a "${SCHED_WAIT_TERM}" ]; then
 fi
 
 # kill daemon when run-time exceeds predefined value
-if [ -e "${LGI_START_STAMP}" -a "${SCHED_TERM_AFTER}" ]; then
+if [ "${LGI_START_STAMP}" -a -e "${LGI_START_STAMP}" -a "${SCHED_TERM_AFTER}" ]; then
 	START=`cat "${LGI_START_STAMP}"`
 	DIFF=`expr "${NOW}" - "${START}"`
 	if [ ${DIFF} -ge ${SCHED_TERM_AFTER} ]; then

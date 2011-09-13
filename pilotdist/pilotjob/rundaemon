@@ -3,18 +3,37 @@
 # setup environment for runing
 [ "${LGI_ROOT}" ] || LGI_ROOT="`cd \`dirname $0\` && pwd`"
 [ "${LGI_PID_FILE}" ] || LGI_PID_FILE="${LGI_ROOT}/LGI.pid"
-export LGI_ROOT LGI_PID_FILE
+[ "${LGI_LOG_FILE}" ] || LGI_LOG_FILE="${LGI_ROOT}/LGI.log"
+
+# kill and autokill state files
+LGI_RUNNING_STAMP="${LGI_ROOT}/running_stamp"
+LGI_START_STAMP="${LGI_ROOT}/start_stamp"
+LGI_TERMINATE_FLAG="${LGI_ROOT}/terminate_flag"
+LGI_PID_FILE="${LGI_ROOT}/LGI.pid"
+date +%s >"${LGI_RUNNING_STAMP}"
+date +%s >"${LGI_START_STAMP}"
+rm -f "${LGI_TERMINATE_FLAG}"
+export LGI_ROOT LGI_RUNNING_STAMP LGI_START_STAMP LGI_TERMINATE_FLAG LGI_LOG_FILE LGI_PID_FILE
+
 PATH="$PATH:${LGI_ROOT}/bin"
 LD_LIBRARY_PATH="${LGI_ROOT}/lib"
 export PATH LD_LIBRARY_PATH
 
-cd "${LGI_ROOT}"
-
 # run the LGI daemon
+cd "${LGI_ROOT}"
 echo Starting the LGI daemon...
-"${LGI_ROOT}/bin/LGI_daemon" ${LGI_OPTIONS} "${LGI_ROOT}/LGI.cfg" &
+"${LGI_ROOT}/bin/LGI_daemon" -l "${LGI_LOG_FILE}" ${LGI_OPTIONS} "${LGI_ROOT}/LGI.cfg" &
 PID=$!
 echo ${PID} >"${LGI_PID_FILE}"
+# log to stdout also
+tail -f -n 10000 "${LGI_LOG_FILE}" &
+TAILPID=$!
+# wait for daemon to finish
 wait ${PID}
-exit $?
+RET=$?
+kill "${TAILPID}"
+
+# cleanup files
+rm -f "${LGI_RUNNING_STAMP}" "${LGI_START_STAMP}" "${LGI_TERMINATE_FLAG}" "${LGI_PID_FILE}"
+exit ${RET}
 

@@ -66,7 +66,7 @@ pkg=`dirname $0`/../pilotjob.tar.gz
 [ -e "$pkg" ] && mv "$pkg" "$pkg.old"
 
 # don't use spaces ...
-find . ! -path . -a ! -path ./LGI.pid -a ! -path "./`basename $0`" -a ! -path './runhere/*' -print | xargs tar czf "$pkg"
+find . ! -path . -a ! -path ./LGI.pid -a ! -path "./`basename $0`" -a ! -path './LGI.log' -a ! -path './runhere/*' -a ! -path './*_stamp' -a ! -path './*_flag' -print | xargs tar czf "$pkg"
 
 echo "Pilotjob tarball created in: $pkg"
 

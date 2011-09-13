@@ -43,8 +43,6 @@ Then modify it for your application:
  5) Adapt the scripts
     5a) add "lgipilot_job_check_running" to the job_check_running_script
     5b) add "lgipilot_check_system_limits" to the check_system_limits_script
-    These scripts only operate if run as a pilot job, so you can test
-    the resource daemon locally.
 
 Then you can test the resource daemon locally using `rundaemon`. When that
 works with your project server, you can package the files by running
