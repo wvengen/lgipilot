@@ -13,8 +13,13 @@
 # extract LGI resource daemon and application
 tar xzf pilotjob.tar.gz
 
-# crazy fast polling times for development
-LGI_OPTIONS='-ft 5 -st 10'
+# polling times
+#   -ft is used when checking local script status, this can be fairly low
+#         since ps is a cheap operation; gives fast small job interaction
+#   -st is used when contacting the LGI project server; this should be low
+#         when there are little pilotjobs and the job length is small,
+#         otherwise is should be a in the order of minutes or longer.
+LGI_OPTIONS='-ft 3 -st 20'
 
 # setup auto-termination environment
 LGI_ROOT="`pwd`"
