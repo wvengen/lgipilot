@@ -49,14 +49,8 @@ del standardSetup
 import Ganga.Runtime
 from Ganga.Core import GangaException
 
-# Customise Ganga invocation for the LGI Pilot job manager
-gangaCfg = os.path.join(exeDir, 'lgipilot.ini')
-
-runhereDir = os.path.join(exeDir, 'runhere')
-gangaArgv = [sys.argv[0], '--config=%s'%(os.path.join(exeDir, 'lgipilot.ini')),
-             '-o[Logging]_logfile=%s'%(os.path.join(exeDir, 'lgipilot.log')),
-             '-o[Configuration]gangadir=%s'%(runhereDir)
-            ] + sys.argv[1:]
+# use different default configuration file; can be overidden on command-line
+gangaArgv = [sys.argv[0], '--config=%s'%(os.path.join(exeDir, 'lgipilot.ini'))] + sys.argv[1:]
 
 # Process options given at command line and in configuration file(s)
 # Perform environment setup and bootstrap
@@ -77,8 +71,9 @@ try:
    # avoid useless transition message when new repository is created
    # TODO file upstream bug
    prog.configure()
-   if not os.path.exists(os.path.join(runhereDir,'repository')):
-      os.makedirs(os.path.join(runhereDir,'repository',Config.getConfig('Configuration')['user'],'LocalXML','6.0'))
+   config = Config.getConfig('Configuration')
+   if not os.path.exists(os.path.join(config['gangadir'],'repository')):
+      os.makedirs(os.path.join(config['gangadir'],'repository',config['user'],'LocalXML','6.0'))
    prog.initEnvironment()
    prog.bootstrap()
    if not os.path.exists(Config.getConfig('LGI')['PilotDist']):
