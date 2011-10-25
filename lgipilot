@@ -52,7 +52,7 @@ from Ganga.Core import GangaException
 # use different default configuration file; can be overidden on command-line
 configpath = configpath_rel = os.path.join(exeDir, 'lgipilot.ini')
 if not os.path.exists(configpath_rel):
-	configpath = configpath_abs = os.path.join('etc','lgipilot.ini')
+	configpath = configpath_abs = '/etc/lgipilot.ini'
 if not os.path.exists(configpath):
 	sys.stderr.write("Could not open configuration file %s or %s\n"%(configpath_rel, configpath_abs))
 	sys.exit(2)
