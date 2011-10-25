@@ -9,10 +9,13 @@
 #
 # http://www.gnu.org/licenses/gpl.txt
 
+umask 0077
+RUNUSER=lgipilot
+
 ### parse options
 
 help=0
-if [ "$1" == "-h" -o "$1" == "--help" ]; then
+if [ "$1" = "-h" -o "$1" = "--help" ]; then
 	help=1
 	shift
 fi
@@ -51,7 +54,7 @@ if [ ! -e "$cafile" ]; then
 fi
 
 lgiserver=`cat LGI.cfg|$XML LGI|$XML resource|$XML project|$XML project_master_server`
-if [ ! "$lgiserver" -o "$lgiserver" == "https://example.com/LGI" ]; then
+if [ ! "$lgiserver" -o "$lgiserver" = "https://example.com/LGI" ]; then
 	echo "Error: LGI server not specified" >/dev/stderr
 	err=1
 fi
@@ -67,6 +70,12 @@ pkg=`dirname $0`/../pilotjob.tar.gz
 
 # don't use spaces ...
 find . ! -path . -a ! -path ./LGI.pid -a ! -path "./`basename $0`" -a ! -path './LGI.log' -a ! -path './runhere/*' -a ! -path './*_stamp' -a ! -path './*_flag' -print | xargs tar czf "$pkg"
-
 echo "Pilotjob tarball created in: $pkg"
+
+# should be readable by lgipilot user only
+if [ `id -u` -eq 0 ] && getent passwd "${RUNUSER}" >/dev/null; then
+	chown "${RUNUSER}" "$pkg"
+elif [ `id -u -n` != "${RUNUSER}" ]; then
+	echo "Make sure that it is readable only by the user running the pilot job manager"
+fi
 
