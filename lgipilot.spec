@@ -54,7 +54,7 @@ users of LGI to use a grid without the need for grid certificates.
 
 %prep
 # github serves directory name with commit hash; we want to work without it
-%setup -q -D -c %{name}-%{version}
+%setup -q -c %{name}-%{version}
 mv wvengen-%{name}-*/* wvengen-%{name}-*/.[a-zA-Z0-9]* .
 rmdir wvengen-%{name}-*
 
@@ -71,14 +71,13 @@ mkdir -p %{buildroot}/%{sbindir}
 ln -sf %{sharedir}/lgipilot %{buildroot}/%{sbindir}
 # configuration
 mkdir -p %{buildroot}/%{etcdir}
-cp lgipilot.ini %{buildroot}/%{etcdir}
-sed -i 's|^#?\(PilotDist\s*=\).*$|\1 %{vardir}/pilotjob.tar.gz|;
-        s|^#?\(PilotScript\s*=\).*$|\1 %{vardir}/pilotrun.sh|;
-        s|^#?\(StatsFile\s*=\).*$|\1 %{logdir}/lgipilot.stats|;
-        s|^#?\(PidFile\s*=\).*$|\1 %{rundir}/lgipilot.pid|;
-        s|^#?\(_logfile\s*=\).*$|\1 %{logdir}/lgipilot.log|;
-        s|^#?\(gangadir\s*=\).*$|\1 %{spooldir}|;
-       ' %{buildroot}/%{etcdir}/lgipilot.ini
+sed 's|^#\?\(PilotDist\s*=\).*$|\1 %{vardir}/pilotjob.tar.gz|;
+     s|^#\?\(PilotScript\s*=\).*$|\1 %{vardir}/pilotrun.sh|;
+     s|^#\?\(StatsFile\s*=\).*$|\1 %{logdir}/lgipilot.stats|;
+     s|^#\?\(PidFile\s*=\).*$|\1 %{rundir}/lgipilot.pid|;
+     s|^#\?\(_logfile\s*=\).*$|\1 %{logdir}/lgipilot.log|;
+     s|^#\?\(gangadir\s*=\).*$|\1 %{spooldir}|;
+     ' <lgipilot.ini >%{buildroot}/%{etcdir}/lgipilot.ini
 # documentation in prefix
 mkdir -p %{buildroot}/%{docdir}
 cp README %{buildroot}/%{docdir}/README.lgipilot
@@ -91,6 +90,8 @@ cp -R pilotdist/pilotjob %{buildroot}/%{vardir}
 ln -sf %{docdir}/README.lgipilot.pilot %{buildroot}/%{vardir}/README.pilot
 mkdir -p %{buildroot}/%{vardir}/pilotjob/certificates || true
 mkdir -p %{buildroot}/%{spooldir}
+# workaround for pre-config logging
+ln -s %{logdir}/lgipilot.log %{buildroot}/%{vardir}/.ganga.log
 # precompile python files (to avoid selinux issues and improve performance as non-root)
 python -mcompileall %{buildroot}/%{sharedir}/src
 python -O -mcompileall %{buildroot}/%{sharedir}/src
@@ -109,10 +110,12 @@ cat <<'EOF' >%{buildroot}/%{_initrddir}/lgipilot
 
 LGIPILOT=%{sbindir}/lgipilot
 PIDFILE=%{rundir}/lgipilot.pid
+LOGFILE=%{logdir}/lgipilot.log
 LOCKFILE=/var/lock/subsys/lgipilot
 
 start() {
 	echo -n "Starting LGI pilot job manager: "
+	touch ${LOGFILE} && chown %{runuser}:%{rungroup} ${LOGFILE} # make sure logging will work
 	daemon --user %{runuser} --pidfile ${PIDFILE} ${LGIPILOT} --config=%{etcdir}/lgipilot.ini
 	RETVAL=$?
 	echo
@@ -145,15 +148,14 @@ EOF
 # logrotation is done by lgipilot
 
 %files
-%defattr(0444,root,root)
-%{sharedir}/src
-%attr(0755,-,-) %{sharedir}/lgipilot
+%{sharedir}
 %attr(0755,-,-) %{sbindir}/lgipilot
-%{docdir}/README.lgipilot
-%{docdir}/README.lgipilot.pilot
+%doc %{docdir}/README.lgipilot
+%doc %{docdir}/README.lgipilot.pilot
 %{vardir}
-%dir %{spooldir}
 %attr(700,-,-) %{vardir}/pilotjob/certificates
+#%ghost %{vardir}/pilotjob.tar.gz
+%attr(750,lgipilot,lgi) %dir %{spooldir}
 %config %{etcdir}/lgipilot.ini
 %attr(755,-,-) %{_initrddir}/lgipilot
 
