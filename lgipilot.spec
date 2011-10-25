@@ -1,7 +1,6 @@
 %define name lgipilot
 %define version_major 0
 %define version_minor 2
-%define commit ebd2c1d
 %define release 1
 
 %define version %{version_major}.%{version_minor}
@@ -54,7 +53,10 @@ using pilot jobs. This eliminates the latency inherent in grids, and allows
 users of LGI to use a grid without the need for grid certificates.
 
 %prep
-%setup -q -n wvengen-%{name}-%{commit}
+# github serves directory name with commit hash; we want to work without it
+%setup -q -D -c %{name}-%{version}
+mv wvengen-%{name}-*/* wvengen-%{name}-*/.[a-zA-Z0-9]* .
+rmdir wvengen-%{name}-*
 
 %build
 # nothing to do
