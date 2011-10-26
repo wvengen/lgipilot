@@ -116,7 +116,9 @@ LOCKFILE=/var/lock/subsys/lgipilot
 start() {
 	echo -n "Starting LGI pilot job manager: "
 	touch ${LOGFILE} && chown %{runuser}:%{rungroup} ${LOGFILE} # make sure logging will work
-	daemon --user %{runuser} --pidfile ${PIDFILE} ${LGIPILOT} --config=%{etcdir}/lgipilot.ini
+	touch ${PIDFILE} && chown %{runuser}:%{rungroup} ${PIDFILE} # make sure pidfile can be written
+	# Ganga doesn't like daemonizing itself, and daemon doesn't understand --background
+	daemon --user %{runuser} --pidfile ${PIDFILE} nohup ${LGIPILOT} --config=%{etcdir}/lgipilot.ini >/dev/null 2>&1 </dev/null &
 	RETVAL=$?
 	echo
 	[ $RETVAL -eq 0 ] && touch ${LOCKFILE}
