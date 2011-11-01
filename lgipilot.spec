@@ -92,7 +92,7 @@ ln -sf %{docdir}/README.lgipilot.pilot %{buildroot}/%{vardir}/README.pilot
 mkdir -p %{buildroot}/%{vardir}/pilotjob/certificates || true
 mkdir -p %{buildroot}/%{spooldir}
 # workaround for pre-config logging; is handled by stdout redirection anyways
-ln -s /dev/null %{buildroot}/%{vardir}/.ganga.log
+ln -sf /dev/null %{buildroot}/%{vardir}/.ganga.log
 # precompile python files (to avoid selinux issues and improve performance as non-root)
 python -mcompileall %{buildroot}/%{sharedir}/src
 python -O -mcompileall %{buildroot}/%{sharedir}/src
@@ -153,8 +153,9 @@ esac
 exit $?
 EOF
 # logrotation
-cat <<EOF >%{buildroot}/%{etcdir}/logrotate.d/LGI
-/var/log/lgipilot {
+mkdir -p %{buildroot}/%{etcdir}/logrotate.d
+cat <<EOF >%{buildroot}/%{etcdir}/logrotate.d/lgipilot
+/var/log/lgipilot.log {
 	missingok
 	notifempty
 	size 64M
