@@ -81,8 +81,8 @@ try:
    # when root, run as user to avoid file possible permission problems
    if pwd.getpwuid(os.getuid())[0] != config['user']:
      uid, gid = pwd.getpwnam(config['user'])[2:4]
-     os.setreuid(uid, uid)
      os.setregid(gid, gid)
+     os.setreuid(uid, uid)
    # avoid useless transition message when new repository is created
    # TODO file upstream bug
    if not os.path.exists(os.path.join(config['gangadir'],'repository')):
