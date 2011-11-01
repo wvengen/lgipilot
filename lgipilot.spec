@@ -75,7 +75,8 @@ sed 's|^#\?\(PilotDist\s*=\).*$|\1 %{vardir}/pilotjob.tar.gz|;
      s|^#\?\(PilotScript\s*=\).*$|\1 %{vardir}/pilotrun.sh|;
      s|^#\?\(StatsFile\s*=\).*$|\1 %{logdir}/lgipilot.stats|;
      s|^#\?\(PidFile\s*=\).*$|\1 %{rundir}/lgipilot.pid|;
-     s|^#\?\(_logfile\s*=\).*$|\1 %{logdir}/lgipilot.log|;
+     s|^#\?\(_logfile\s*=\).*$|#\1 /dev/null|;
+     s|^#\?\(_logfile_size\s*=\).*$|\1 -1|;
      s|^#\?\(gangadir\s*=\).*$|\1 %{spooldir}|;
      ' <lgipilot.ini >%{buildroot}/%{etcdir}/lgipilot.ini
 # documentation in prefix
@@ -90,8 +91,8 @@ cp -R pilotdist/pilotjob %{buildroot}/%{vardir}
 ln -sf %{docdir}/README.lgipilot.pilot %{buildroot}/%{vardir}/README.pilot
 mkdir -p %{buildroot}/%{vardir}/pilotjob/certificates || true
 mkdir -p %{buildroot}/%{spooldir}
-# workaround for pre-config logging
-ln -s %{logdir}/lgipilot.log %{buildroot}/%{vardir}/.ganga.log
+# workaround for pre-config logging; is handled by stdout redirection anyways
+ln -s /dev/null %{buildroot}/%{vardir}/.ganga.log
 # precompile python files (to avoid selinux issues and improve performance as non-root)
 python -mcompileall %{buildroot}/%{sharedir}/src
 python -O -mcompileall %{buildroot}/%{sharedir}/src
@@ -115,10 +116,9 @@ LOCKFILE=/var/lock/subsys/lgipilot
 
 start() {
 	echo -n "Starting LGI pilot job manager: "
-	touch ${LOGFILE} && chown %{runuser}:%{rungroup} ${LOGFILE} # make sure logging will work
 	touch ${PIDFILE} && chown %{runuser}:%{rungroup} ${PIDFILE} # make sure pidfile can be written
 	# Ganga doesn't like daemonizing itself, and daemon doesn't understand --background
-	daemon --user %{runuser} --pidfile ${PIDFILE} nohup ${LGIPILOT} --config=%{etcdir}/lgipilot.ini >/dev/null 2>&1 </dev/null &
+	daemon --user %{runuser} --pidfile ${PIDFILE} nohup "${LGIPILOT} --config=%{etcdir}/lgipilot.ini >${LOGFILE} 2>&1 </dev/null &"
 	RETVAL=$?
 	echo
 	[ $RETVAL -eq 0 ] && touch ${LOCKFILE}
@@ -135,11 +135,16 @@ stop() {
 	return $RETVAL
 }
 
+restart() {
+	stop
+	start
+}
+
 case "$1" in
 start)       start ;;
 stop)        stop ;;
 status)      status ${LGIPILOT} ;;
-restart)     stop; start ;;
+restart)     restart ;;
 condrestart) [ -f ${LOCKFILE} ] && restart ;;
 reload)      [ -f ${LOCKFILE} ] && kill -USR1 `cat ${PIDFILE}` ;;
 *)           echo "Usage: $0 {start|stop|reload|restart|condrestart|status}"; exit 1 ;;
@@ -147,7 +152,19 @@ esac
 
 exit $?
 EOF
-# logrotation is done by lgipilot
+# logrotation
+cat <<EOF >%{buildroot}/%{etcdir}/logrotate.d/LGI
+/var/log/lgipilot {
+	missingok
+	notifempty
+	size 64M
+	rotate 6
+	compress
+	postrotate
+		service lgipilot condrestart 2>/dev/null || true
+	endscript
+}
+EOF
 
 %files
 %{sharedir}
@@ -159,6 +176,7 @@ EOF
 #%ghost %{vardir}/pilotjob.tar.gz
 %attr(750,lgipilot,lgi) %dir %{spooldir}
 %config %{etcdir}/lgipilot.ini
+%config %{etcdir}/logrotate.d/lgipilot
 %attr(755,-,-) %{_initrddir}/lgipilot
 
 %pre
