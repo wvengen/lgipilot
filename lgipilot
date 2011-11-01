@@ -22,6 +22,7 @@
 
 import os
 import sys
+import pwd
 exeDir = os.path.normpath(os.path.dirname(os.path.realpath(sys.argv[0])))
 # run in own directory to resolve relative paths properly
 os.chdir(exeDir)
@@ -75,10 +76,15 @@ if not prog.args:
 
 try:
    from Ganga.Utility.Config import Config
-   # avoid useless transition message when new repository is created
-   # TODO file upstream bug
    prog.configure()
    config = Config.getConfig('Configuration')
+   # when root, run as user to avoid file possible permission problems
+   if pwd.getpwuid(os.getuid())[0] != config['user']:
+     uid, gid = pwd.getpwnam(config['user'])[2:4]
+     os.setreuid(uid, uid)
+     os.setregid(gid, gid)
+   # avoid useless transition message when new repository is created
+   # TODO file upstream bug
    if not os.path.exists(os.path.join(config['gangadir'],'repository')):
       os.makedirs(os.path.join(config['gangadir'],'repository',config['user'],'LocalXML','6.0'))
    prog.initEnvironment()
