@@ -25,7 +25,9 @@ class LGI:
         '''Cancel all pilot jobs; only works in daemon process'''
         from Ganga.GPI import jobs
         tocancel = filter(lambda j: j.status in ['submitted', 'running'], jobs)
-        for j in tocancel: j.kill()
+        for j in tocancel:
+            try: j.kill()
+            except: continue
         return len(tocancel)
     pilot_cancel = classmethod(pilot_cancel)
     
