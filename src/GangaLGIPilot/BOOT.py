@@ -36,9 +36,12 @@ class LGI:
         if not os.path.exists(pidfile):
             return None
         # get it
-        f = open(pidfile, 'r')
-        pid = int(f.read())
-        f.close()
+        try:
+            f = open(pidfile, 'r')
+            pid = int(f.read())
+            f.close()
+        except (OSError, ValueError):
+            return None
         # verify it's still running; if not, remove
         try:
             os.kill(pid, 0)
