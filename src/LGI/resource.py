@@ -12,6 +12,7 @@ import sys
 import xml.dom.minidom
 import tempfile
 import tarfile
+import signal
 import atexit
 
 import xml2dict
@@ -130,6 +131,8 @@ class Resource(Connection):
 
         # register cleanup handler first, to avoid problems with __del__
         atexit.register(lambda: self.__cleanup())
+        self._prev_sigint = signal.signal(signal.SIGINT, lambda n,s: self.__cleanup(self._prev_sigint,n,s))
+        self._prev_sigterm = signal.signal(signal.SIGTERM, lambda n,s: self.__cleanup(self._prev_sigterm,n,s))
         # then unpack relevant files into temporary directory
         self._tmpdir = tempfile.mkdtemp('.tmp','lgipilot.')
         self.parseConfig(conf)
@@ -161,8 +164,15 @@ class Resource(Connection):
                     pass
         dist.close()
 
-    def __cleanup(self):
-        '''Cleanup any temporary files and close connection'''
+    def __cleanup(self, prevhandler=None, number=None, stackframe=None):
+        '''Cleanup any temporary files and close connection.
+
+        Optionally calls previous signal handler.
+
+        @param prevhandler previous signal handler (see signal.getsignal())
+        @param number signal number to pass to previous signal handler
+        @param stackframe stackframe to pass to previous signal handler
+        '''
         self.close()
         if self._tmpdir:
             self.__remove_if_tmp(self._certificate)
@@ -170,6 +180,10 @@ class Resource(Connection):
             self.__remove_if_tmp(self._caChain)
             os.rmdir(self._tmpdir)
             self._tmpdir = None
+        if prevhandler is not None:
+            if prevhandler == signal.SIG_IGN: return
+            if prevhandler == signal.SIG_DFL: return # XXX don't really know what to do
+            prevhandler(number, stackframe)
 
     def __remove_if_tmp(self, filename):
         '''remove a filename from the tempdir, if it is in there''' 
