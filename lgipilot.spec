@@ -78,6 +78,7 @@ sed 's|^#\?\(PilotDist\s*=\).*$|\1 %{vardir}/pilotjob.tar.gz|;
      s|^#\?\(_logfile\s*=\).*$|#\1 /dev/null|;
      s|^#\?\(_logfile_size\s*=\).*$|\1 -1|;
      s|^#\?\(gangadir\s*=\).*$|\1 %{spooldir}|;
+     s|^#\?\(user\s*=\).*$|\1 %{runuser}|;
      ' <lgipilot.ini >%{buildroot}/%{etcdir}/lgipilot.ini
 # documentation in prefix
 mkdir -p %{buildroot}/%{docdir}
