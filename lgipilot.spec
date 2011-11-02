@@ -28,6 +28,7 @@
 %filter_requires_in %{vardir}
 %filter_setup
 }
+%define debug_package %{nil}
 
 Summary: Leiden Grid Infrastructure pilotjob manager
 Name: %{name}
