@@ -46,7 +46,8 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-build-%(%{__id_u} -n)
 Prefix: %{prefix}
 Requires: /bin/sh, /usr/bin/env, /usr/bin/python
 Requires(pre): shadow-utils
-Provides: bundled(libcrypto.so.4(x86-32)) bundled(libssl.so.4(x86-32)) bundled(libcurl.so.3(x86-32))
+Provides: config(%{name})=%{version}-%{release} bundled(libcrypto.so.0.9.7(x86-32)) bundled(libssl.so.0.9.7(x86-32)) bundled(libcurl.so.3(x86-32)) bundled(libidn.so.11(x86-32))
+AutoReqProv: no
 
 %description
 Daemon for running Leiden Grid Infrastructure (LGI) jobs on a grid (like gLite)
