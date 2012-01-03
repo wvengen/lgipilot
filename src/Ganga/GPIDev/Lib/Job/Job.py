@@ -15,11 +15,24 @@ logger = Ganga.Utility.logging.getLogger()
 from Ganga.Utility.util import isStringLike
 from Ganga.Utility.logging import log_user_exception
 
+import Ganga.Utility.Config
+config = Ganga.Utility.Config.getConfig('Configuration')
+from Ganga.Utility.files import expandfilename
+
 from Ganga.Core import GangaException
 from Ganga.Core.GangaRepository import RegistryKeyError
 
 from Ganga.GPIDev.Adapters.IApplication import PostprocessStatusUpdate
+from Ganga.GPIDev.Lib.File import ShareDir
 
+from Ganga.GPIDev.Lib.Registry import *
+from Ganga.Core.GangaRepository import *
+
+from Ganga.GPIDev.Base.Proxy import isType
+from Ganga.GPIDev.Lib.File import File
+from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
+
+import os, shutil, sys
 
 class JobStatusError(GangaException):
     def __init__(self,*args):
@@ -31,6 +44,16 @@ class JobError(GangaException):
         self.what=what
     def __str__(self):
         return "JobError: %s"%str(self.what)
+
+class PreparedStateError(GangaException):
+    def __init__(self,txt):
+        GangaException.__init__(self,txt)
+        self.txt=txt
+    def __str__(self):
+        return "PreparedStateError: %s"%str(self.txt)
+
+class FakeError(GangaException):
+    pass
 
 import Ganga.Utility.guid
     
@@ -121,6 +144,7 @@ class Job(GangaObject):
                                     'time':ComponentItem('jobtime', defvalue=None,protected=1,comparable=0,doc='provides timestamps for status transitions'),
                                     'application' : ComponentItem('applications',doc='specification of the application to be executed'),
                                     'backend': ComponentItem('backends',doc='specification of the resources to be used (e.g. batch system)'),
+                                    'outputfiles' : OutputFileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.OutputFile.OutputFile'],sequence=1,doc="list of OutputFile objects decorating what have to be done with the output files after job is completed "),
                                     'id' : SimpleItem('',protected=1,comparable=0,doc='unique Ganga job identifier generated automatically'),
                                     'status': SimpleItem('new',protected=1,checkset='_checkset_status',doc='current state of the job, one of "new", "submitted", "running", "completed", "killed", "unknown", "incomplete"'),
                                     'name':SimpleItem('',doc='optional label which may be any combination of ASCII characters',typelist=['str']),
@@ -140,7 +164,7 @@ class Job(GangaObject):
 
     _category = 'jobs'
     _name = 'Job'
-    _exportmethods = ['submit','remove','kill', 'resubmit', 'peek','fail', 'force_status','merge' ]
+    _exportmethods = ['prepare','unprepare','submit','remove','kill', 'resubmit', 'peek','fail', 'force_status','merge' ]
 
     default_registry = 'jobs'
 
@@ -352,6 +376,7 @@ class Job(GangaObject):
     def postprocess_hook(self):
         self.application.postprocess()
         self.getMonitoringService().complete()
+        self.backend.postprocess(self.outputfiles, self.getOutputWorkspace().getPath())
 
     def postprocess_hook_failed(self):
         self.application.postprocess_failed()
@@ -366,13 +391,23 @@ class Job(GangaObject):
     def monitorRollbackToNew_hook(self):
         self.getMonitoringService().rollback()
 
-    def _auto__init__(self,registry=None):
+    def _auto__init__(self,registry=None, unprepare=None):
         if registry is None:
             from Ganga.Core.GangaRepository import getRegistry
             registry = getRegistry(self.default_registry)
 
+        if unprepare is True:
+            logger.info("Calling unprepare() from Job.py")
+            self.application.unprepare()
+
         self.info.uuid = Ganga.Utility.guid.uuid()
 
+        #increment the shareref counter if the job we're copying is prepared.
+        shareref = GPIProxyObjectFactory(getRegistry("prep").getShareRef())
+#        if hasattr(self.application,'is_prepared') and self.application.is_prepared is not None and self.application.is_prepared is not True:
+#            logger.warning('calling incrementsharecounter from job.py')
+#            self.application.incrementShareCounter(self.application.is_prepared.name)
+#            logger.warning("Increasing shareref in job.py")
         # register the job (it will also commit it)
         # job gets its id now
         registry._add(self)
@@ -569,7 +604,88 @@ class Job(GangaObject):
 
         return None
 
-    def submit(self,keep_going=None,keep_on_fail=None):
+
+    def _create_post_process_output(self):
+ 
+        from Ganga.GPIDev.Lib.File.OutputFile import OutputFile
+        from Ganga.GPIDev.Lib.File.CompressedFile import CompressedFile
+
+        from Ganga.GPIDev.Lib.File.FileBuffer import FileBuffer
+
+        from Ganga.Utility.Config import getConfig
+
+        content = ''
+
+        if len(self.outputfiles) > 0:
+            for outputFile in self.outputfiles:
+                if outputFile.__class__.__name__ == 'CompressedFile':
+
+                    content += 'zipped %s\n' % outputFile.name  
+
+                elif outputFile.__class__.__name__ == 'MassStorageFile': 
+
+                    massStorageConfig = getConfig('MassStorageOutput')  
+                    content += 'massstorage %s %s %s %s %s\n' % (outputFile.name , massStorageConfig['mkdir_cmd'],  massStorageConfig['cp_cmd'], massStorageConfig['ls_cmd'], massStorageConfig['path'])
+
+                elif outputFile.__class__.__name__ == 'LCGStorageElementFile':
+
+                    lcgSEConfig = getConfig('LCGStorageElementOutput')
+                    content += 'lcgse %s %s %s\n' % (outputFile.name , lcgSEConfig['LFC_HOST'],  lcgSEConfig['dest_SRM'])
+
+        if content is not '':
+            self.getInputWorkspace().writefile(FileBuffer('__postprocessoutput__', content))
+
+
+    def prepare(self,force=False):
+        '''A method to put a job's application into a prepared state. Returns 
+        True on success.
+        
+        The benefits of preparing an application are twofold:
+
+        1) The application can be copied from a previously executed job and
+           run again over a different input dataset.
+        2) Sharing applications (and their associated files) between jobs will 
+           optimise disk usage of the Ganga client.
+
+        Exactly what happens during the transition to becoming prepared
+        is determined by the application associated with the job. 
+        See help(j.application.prepare) for application-specific comments.
+
+        Prepared applications are always associated with a Shared Directory object
+        which contains their required files. Details for all Shared Directories in use
+        can been seen by calling 'shareref'. See help(shareref) for further details.
+        
+        '''
+        if not hasattr(self.application,'is_prepared'):
+            logger.warning("Non-preparable application %s cannot be prepared" % self.application._name)
+            return
+
+        if (self.application.is_prepared is not None) and (force == False):
+            msg = "The application associated with job %d has already been prepared. To force the operation, call prepare(force=True)" % (self.id)
+            raise JobError(msg)
+        if (self.application.is_prepared is None):
+            add_to_inputsandbox = self.application.prepare()
+            if isType(add_to_inputsandbox,list):
+                self.inputsandbox.extend(add_to_inputsandbox)
+        elif (self.application.is_prepared is not None) and (force == True):
+            self.application.unprepare(force=True)
+            self.application.prepare(force=True)
+            
+
+
+    def unprepare(self,force=False):
+        '''Revert the application associated with a job to the unprepared state
+        Returns True on success.
+        '''
+        if not hasattr(self.application,'is_prepared'):
+            logger.warning("Non-preparable application %s cannot be unprepared" % self.application._name)
+            return
+
+        logger.debug("Running unprepare() within Job.py")
+        self.application.unprepare()
+
+
+    def submit(self,keep_going=None,keep_on_fail=None,prepare=False):
         '''Submits a job. Return true on success.
 
         First  the  application   is  configured  which  may  generate
@@ -648,7 +764,25 @@ class Job(GangaObject):
                 raise JobError(msg)
 
             self.getDebugWorkspace().remove(preserve_top=True)
-            
+
+            if hasattr(self.application,'is_prepared'):
+                if (self.application.is_prepared is None) or (prepare == True):
+                    self.prepare(force=True)
+                elif self.application.is_prepared is True:
+                    msg = "Job %d's application has is_prepared=True. This prevents any automatic (internal) call to the application's prepare() method." % (self.id)
+                    logger.info(msg)
+                else:
+                    msg = "Job %d's application has already been prepared." % (self.id)
+                    logger.info(msg)
+
+                if self.application.is_prepared is not True and self.application.is_prepared is not None:
+                    if not os.path.isdir(self.application.is_prepared.name):
+                        msg = "Cannot find shared directory for prepared application; reverting job to new and unprepared"
+                        self.unprepare()
+                        raise JobError(msg)
+
+
+
             appmasterconfig = self.application.master_configure()[1] # FIXME: obsoleted "modified" flag
             # split into subjobs
 #            try:
@@ -676,6 +810,7 @@ class Job(GangaObject):
                         j._init_workspace()
 
                     rjobs = self.subjobs
+                    logger.info('submitting %d subjobs', len(rjobs))
                     self._commit()
                 else:
                     rjobs = [self]
@@ -692,6 +827,9 @@ class Job(GangaObject):
 
             # notify monitoring-services
             self.monitorPrepare_hook(jobsubconfig) 
+
+            #create a file in the inputsandbox with instructions for postporcessing output on the WN
+            self._create_post_process_output()
 
             # submit the job
             try:
@@ -857,6 +995,12 @@ class Job(GangaObject):
 
             self.getDebugWorkspace(create=False).remove(preserve_top=False)
 
+            #If the job is associated with a shared directory resource (e.g. has a prepared() application)
+            #decrement the reference counter.
+            if hasattr(self.application,'is_prepared') and self.application.__getattribute__('is_prepared'):
+                if self.application.is_prepared is not True:
+                    self.application.decrementShareCounter(self.application.is_prepared.name)
+                
 
     def fail(self,force=False):
         """Deprecated. Use force_status('failed') instead."""
