@@ -1,3 +1,5 @@
+import datetime
+import time
 from Ganga.GPIDev.Adapters.IBackend import IBackend
 from Ganga.GPIDev.Base import GangaObject
 from Ganga.GPIDev.Schema import *
@@ -133,8 +135,12 @@ class Batch(IBackend):
         scriptpath=self.preparejob(jobconfig,master_input_sandbox)
 
         # FIX from Angelo Carbone
-        stderr_option = '-e '+str(outw.getPath())+'stderr'
-        stdout_option = '-o '+str(outw.getPath())+'stdout'
+        # stderr_option = '-e '+str(outw.getPath())+'stderr'
+        # stdout_option = '-o '+str(outw.getPath())+'stdout'
+
+        # FIX from Alex Richards - see Savannah #87477
+        stdout_option = self.config['stdoutConfig'] % str(outw.getPath())
+        stderr_option = self.config['stderrConfig'] % str(outw.getPath())
 
         queue_option = ''
         if self.queue:
@@ -209,8 +215,12 @@ class Batch(IBackend):
                 logger.warning("OSError:"+str(x))
             
         scriptpath = inw.getPath('__jobscript__')
-        stderr_option = '-e '+str(outw.getPath())+'stderr'
-        stdout_option = '-o '+str(outw.getPath())+'stdout'
+        #stderr_option = '-e '+str(outw.getPath())+'stderr'
+        #stdout_option = '-o '+str(outw.getPath())+'stdout'
+
+        # FIX from Alex Richards - see Savannah #87477
+        stdout_option = self.config['stdoutConfig'] % str(outw.getPath())
+        stderr_option = self.config['stderrConfig'] % str(outw.getPath())
 
         queue_option = ''
         if self.queue:
@@ -288,7 +298,69 @@ class Batch(IBackend):
             logger.warning('while killing job %s: %s',self.getJobObject().getFQID('.'), sout)
         
             return not m==None
-        
+
+    def getStateTime(self, status):
+        """Obtains the timestamps for the 'running', 'completed', and 'failed' states.
+
+           The __jobstatus__ file in the job's output directory is read to obtain the start and stop times of the job.
+           These are converted into datetime objects and returned to the user.
+        """
+        j = self.getJobObject()
+        end_list = ['completed', 'failed']
+        d = {}
+        checkstr=''
+
+        if status == 'running': checkstr='START:'
+        elif status == 'completed': checkstr='STOP:'
+        elif status == 'failed': checkstr='FAILED:'
+        else:
+            checkstr=''
+
+        if checkstr=='':
+            logger.debug("In getStateTime(): checkstr == ''")
+            return None
+
+        try:
+            p = os.path.join(j.outputdir, '__jobstatus__')
+            logger.debug("Opening output file at: %s", p)
+            f = open(p)
+        except IOError:
+            logger.debug('unable to open file %s', p)
+            return None
+
+        for l in f.readlines():
+            if checkstr in l:
+                pos=l.find(checkstr)
+                timestr=l[pos+len(checkstr)+1:pos+len(checkstr)+25]
+                try:
+                    t = datetime.datetime(*(time.strptime(timestr, "%a %b %d %H:%M:%S %Y")[0:6]))
+                except ValueError:
+                    logger.debug("Value Error in file: '%s': string does not match required format.", p)
+                    return None
+                return t
+
+        logger.debug("Reached the end of getStateTime('%s'). Returning None.", status)
+        return None
+
+    def timedetails(self):
+        """Return all available timestamps from this backend.
+        """
+        j = self.getJobObject()
+        try: ## check for file. if it's not there don't bother calling getSateTime (twice!)
+            p = os.path.join(j.outputdir, '__jobstatus__')
+            logger.debug("Opening output file at: %s", p)
+            f = open(p)
+            f.close()
+        except IOError:
+            logger.error('unable to open file %s', p)
+            return None
+        del f
+        r = self.getStateTime('running')
+        c = self.getStateTime('completed')
+        d = {'START' : r, 'STOP' : c}
+
+        return d
+
     def preparejob(self,jobconfig,master_input_sandbox):
 
         job = self.getJobObject()
@@ -326,6 +398,39 @@ environment = ###ENVIRONMENT###
 jobid = ###JOBID###
 
 ###PREEXECUTE###
+
+## system command executor with subprocess
+def execSyscmdSubprocess(cmd):
+
+    exitcode = -999
+    mystdout = ''
+    mystderr = ''
+
+    try:
+        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (mystdout, mystderr) = child.communicate()
+        exitcode = child.returncode
+    finally:
+        pass
+
+    return (exitcode, mystdout, mystderr)
+
+def postprocessoutput():
+
+    massStorageList = []          
+
+    inpfile = os.path.join(###INPUT_DIR###, '__postprocessoutput__')
+    
+    if not os.path.exists(inpfile):
+        return None
+                
+    for line in open(inpfile, 'r').readlines(): 
+        line = line.strip()     
+        if line.startswith('massstorage'):
+            massStorageList.append(line)        
+
+    return [massStorageList]
+
 
 def flush_file(f):
    f.flush()
@@ -422,7 +527,7 @@ flush_file(sys.stderr)
 sys.stdout=sys.__stdout__
 sys.stderr=sys.__stderr__
 print >>sys.stdout,"--- GANGA APPLICATION OUTPUT END ---"
-print >>sys.stderr,"--- GANGA APPLICATION ERROR END ---"
+
 
 monitor.stop(result)
 
@@ -434,6 +539,58 @@ except:
 from Ganga.Utility.files import multi_glob, recursive_copy
 
 createOutputSandbox(outputpatterns,filefilter,sharedoutputpath)
+
+postprocesslocations = file(os.path.join(sharedoutputpath, '__postprocesslocations__'), 'w')         
+
+postProcessOutputResult = postprocessoutput()
+
+#code here for upload to castor
+if postProcessOutputResult is not None:
+    for massStorageLine in postProcessOutputResult[0]:
+        massStorageList = massStorageLine.split(' ')
+
+        filenameWildChar = massStorageList[1]
+        cm_mkdir = massStorageList[2]
+        cm_cp = massStorageList[3]
+        cm_ls = massStorageList[4]
+        path = massStorageList[5]
+
+        pathToDirName = os.path.dirname(path)
+        dirName = os.path.basename(path)
+
+        (exitcode, mystdout, mystderr) = execSyscmdSubprocess('nsls %s' % pathToDirName)
+        if exitcode != 0:
+            print >>sys.stderr, 'Error while executing nsls %s command, be aware that Castor commands can be executed only from lxplus, also check if the folder name is correct and existing' % pathToDirName
+            print >>sys.stderr, mystderr
+            continue
+
+        directoryExists = False 
+        for directory in mystdout.split('\\n'):
+            if directory.strip() == dirName:
+                directoryExists = True
+                break
+
+        if not directoryExists:
+            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s' % (cm_mkdir, path))
+            if exitcode != 0:
+                print >>sys.stderr, 'Error while executing %s %s command, check if the ganga user has rights for creating directories in this folder' % (cm_mkdir, path)
+                print >>sys.stderr, mystderr
+                continue
+            
+        import glob 
+        for currentFile in glob.glob(filenameWildChar):
+            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s %s' % (cm_cp, currentFile, os.path.join(path, currentFile)))
+            if exitcode != 0:
+                print >>sys.stderr, 'Error while executing %s %s %s command, check if the ganga user has rights for uploading files to this mass storage folder' % (cm_cp, currentFile, os.path.join(path, currentFile))    
+                print >>sys.stderr, mystderr        
+            else:
+                postprocesslocations.write('massstorage %s %s\\n' % (filenameWildChar, os.path.join(path, currentFile)))
+                #remove file from output dir
+                os.system('rm %s' % currentFile)        
+
+postprocesslocations.close()    
+
+print >>sys.stderr,"--- GANGA APPLICATION ERROR END ---"
 
 for fn in ['__syslog__']:
     try:
@@ -475,6 +632,7 @@ sys.exit(result)
         text = text.replace('###JOBIDNAME###',self.config['jobid_name'])
         text = text.replace('###QUEUENAME###',self.config['queue_name'])
         text = text.replace('###HEARTBEATFREQUENCE###',self.config['heartbeat_frequency'])
+        text = text.replace('###INPUT_DIR###',repr(job.getStringInputDir()))
 
         text = text.replace('###MONITORING_SERVICE###',job.getMonitoringService().getWrapperScriptConstructorText())
 
@@ -489,6 +647,50 @@ sys.exit(result)
         from Ganga.GPIDev.Lib.File import FileBuffer
         
         return job.getInputWorkspace().writefile(FileBuffer('__jobscript__',text),executable=1)
+
+    def postprocess(self, outputfiles, outputdir):  
+    
+        import glob
+        if len(outputfiles) > 0:
+            for outputFile in outputfiles:
+                if outputFile.__class__.__name__ == 'CompressedFile':
+                    #for currentFile in os.listdir(outputdir):
+                    for currentFile in glob.glob(os.path.join(outputdir, outputFile.name)):
+                        #if re.match(outputFile.name, currentFile):
+                        fullFilePath = os.path.join(outputdir, currentFile)
+                        os.system("gzip %s" % fullFilePath)
+
+        def findOutputFile(className, pattern):
+            for outputfile in outputfiles:
+                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
+                    return outputfile
+
+            return None 
+
+        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
+
+        if not os.path.exists(postprocessLocationsPath):
+            return
+
+        postprocesslocations = open(postprocessLocationsPath, 'r')
+        
+        for line in postprocesslocations.readlines():
+            lineParts = line.split(' ') 
+            outputType = lineParts[0] 
+            outputPattern = lineParts[1]
+            outputPath = lineParts[2]           
+
+            if line.startswith('massstorage'):
+                outputFile = findOutputFile('MassStorageFile', outputPattern)
+                if outputFile is not None:
+                    outputFile.setLocation(outputPath.strip('\n'))
+            else:
+                pass
+                #to be implemented for other output file types
+                
+        postprocesslocations.close()
+  
+        os.system('rm %s' % postprocessLocationsPath)
 
     def updateMonitoringInformation(jobs):
 
@@ -594,6 +796,9 @@ config.addOption('submit_str', 'cd %s; bsub %s %s %s %s', "String used to submit
 config.addOption('submit_res_pattern', '^Job <(?P<id>\d*)> is submitted to .*queue <(?P<queue>\S*)>',
                   "String pattern for replay from the submit command")
 
+config.addOption('stdoutConfig', '-o %s/stdout', "String pattern for defining the stdout")
+config.addOption('stderrConfig', '-e %s/stderr', "String pattern for defining the stderr")
+
 config.addOption('kill_str', 'bkill %s', "String used to kill job")
 config.addOption('kill_res_pattern', 
                  '(^Job <\d+> is being terminated)|(Job <\d+>: Job has already finished)|(Job <\d+>: No matching job found)',
@@ -640,6 +845,9 @@ config.addOption('heartbeat_frequency', '30', "Heartbeat frequency config variab
 
 config.addOption('submit_str', 'cd %s; qsub %s %s %s %s', "String used to submit job to queue")
 config.addOption('submit_res_pattern', '^(?P<id>\d*)\.pbs\s*', "String pattern for replay from the submit command")
+
+config.addOption('stdoutConfig', '-o %s/stdout', "String pattern for defining the stdout")
+config.addOption('stderrConfig', '-e %s/stderr', "String pattern for defining the stderr")
 
 config.addOption('kill_str', 'qdel %s', "String used to kill job")
 config.addOption('kill_res_pattern', '(^$)|(qdel: Unknown Job Id)', "String pattern for replay from the kill command")
@@ -689,6 +897,9 @@ config.addOption('heartbeat_frequency', '30', "Heartbeat frequency config variab
 #the -V options means that all environment variables are transferred to the batch job (ie the same as the default behaviour on LSF at CERN)
 config.addOption('submit_str', 'cd %s; qsub -cwd -V %s %s %s %s', "String used to submit job to queue")
 config.addOption('submit_res_pattern', 'Your job (?P<id>\d+) (.+)', "String pattern for replay from the submit command")
+
+config.addOption('stdoutConfig', '-o %s/stdout', "String pattern for defining the stdout")
+config.addOption('stderrConfig', '-e %s/stderr', "String pattern for defining the stderr")
 
 config.addOption('kill_str', 'qdel %s', "String used to kill job")
 config.addOption('kill_res_pattern', '(has registered the job +\d+ +for deletion)|(denied: job +"\d+" +does not exist)', 

@@ -189,7 +189,7 @@ class Localhost(IBackend):
 
 import os,os.path,shutil,tempfile
 import sys,time
-
+import glob
 import sys
 
 # FIXME: print as DEBUG: to __syslog__ file
@@ -219,6 +219,44 @@ outputpatterns = ###OUTPUTPATTERNS###
 appscriptpath = ###APPSCRIPTPATH###
 environment = ###ENVIRONMENT###
 workdir = ###WORKDIR###
+
+
+## system command executor with subprocess
+def execSyscmdSubprocess(cmd):
+
+    exitcode = -999
+    mystdout = ''
+    mystderr = ''
+
+    try:
+        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (mystdout, mystderr) = child.communicate()
+        exitcode = child.returncode
+    finally:
+        pass
+
+    return (exitcode, mystdout, mystderr)
+
+def postprocessoutput():
+
+    zippedList = []           
+    massStorageList = []          
+
+    inpfile = os.path.join(###INPUT_DIR###, '__postprocessoutput__')
+    
+    if not os.path.exists(inpfile):
+        return None
+                
+    for line in open(inpfile, 'r').readlines(): 
+        line = line.strip()     
+        if line.startswith('zipped'):
+            zippedList.append(line.split()[1])
+        elif line.startswith('massstorage'):
+            massStorageList.append(line)        
+
+    zippedListString = " ".join(zippedList)
+
+    return [zippedListString, massStorageList]
 
 statusfilename = os.path.join(sharedoutputpath,'__jobstatus__')
 
@@ -313,11 +351,83 @@ errorfile.flush()
 createOutputSandbox(outputpatterns,None,sharedoutputpath)
 
 outfile.close()
+
+def printError(errorfile, message, error):
+    errorfile.write(message + os.linesep)
+    errorfile.write(error + os.linesep) 
+    errorfile.flush()  
+
+postprocesslocations = file(os.path.join(sharedoutputpath, '__postprocesslocations__'), 'w')         
+
+postProcessOutputResult = postprocessoutput()
+
+#code here for upload to castor
+if postProcessOutputResult is not None:
+    for massStorageLine in postProcessOutputResult[1]:
+        massStorageList = massStorageLine.split(' ')
+
+        filenameWildChar = massStorageList[1]
+        cm_mkdir = massStorageList[2]
+        cm_cp = massStorageList[3]
+        cm_ls = massStorageList[4]
+        path = massStorageList[5]
+
+        pathToDirName = os.path.dirname(path)
+        dirName = os.path.basename(path)
+
+        (exitcode, mystdout, mystderr) = execSyscmdSubprocess('nsls %s' % pathToDirName)
+        if exitcode != 0:
+            printError(errorfile, 'Error while executing nsls %s command, be aware that Castor commands can be executed only from lxplus, also check if the folder name is correct and existing' % pathToDirName, mystderr)
+            continue
+
+        directoryExists = False 
+        for directory in mystdout.split('\\n'):
+            if directory.strip() == dirName:
+                directoryExists = True
+                break
+
+        if not directoryExists:
+            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s' % (cm_mkdir, path))
+            if exitcode != 0:
+                printError(errorfile, 'Error while executing %s %s command, check if the ganga user has rights for creating directories in this folder' % (cm_mkdir, path), mystderr)
+                continue
+            
+        import glob 
+        for currentFile in glob.glob(filenameWildChar):
+            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s %s' % (cm_cp, currentFile, os.path.join(path, currentFile)))
+            if exitcode != 0:
+                printError(errorfile, 'Error while executing %s %s %s command, check if the ganga user has rights for uploading files to this mass storage folder' % (cm_cp, currentFile, os.path.join(path, currentFile)), mystderr)
+            else:
+                postprocesslocations.write('massstorage %s %s\\n' % (filenameWildChar, os.path.join(path, currentFile)))
+                #remove file from output dir
+                os.system('rm %s' % currentFile)
+
 errorfile.close()
+postprocesslocations.close()
 
 from Ganga.Utility.files import recursive_copy
 
-for fn in ['stdout','stderr','__syslog__']:
+f_to_copy = ['stdout','stderr','__syslog__']
+
+
+filesToZip = []
+
+if postProcessOutputResult is not None and postProcessOutputResult[0] != '':
+    patternsToZip = postProcessOutputResult[0].split(' ')
+    for patternToZip in patternsToZip:
+        for currentFile in glob.glob(patternToZip):
+            os.system("gzip %s" % currentFile)
+            filesToZip.append(currentFile)
+            
+final_list_to_copy = []
+
+for f in f_to_copy:
+    if f in filesToZip:
+        final_list_to_copy.append('%s.gz' % f)  
+    else:       
+        final_list_to_copy.append(f)            
+
+for fn in final_list_to_copy:
     try:
         recursive_copy(fn,sharedoutputpath)
     except Exception,x:
@@ -341,9 +451,10 @@ sys.exit()
       script = script.replace('###JOBID###',repr(job.getFQID('.')))
       script = script.replace('###ENVIRONMENT###',repr(environment))
       script = script.replace('###WORKDIR###',repr(workdir))
+      script = script.replace('###INPUT_DIR###',repr(job.getStringInputDir()))
       
       script = script.replace('###MONITORING_SERVICE###',job.getMonitoringService().getWrapperScriptConstructorText())
-      
+
       self.workdir = workdir
       
       from Ganga.Utility.Config import getConfig
@@ -352,7 +463,7 @@ sys.exit()
 
       import Ganga.PACKAGE
       script = script.replace('###SUBPROCESS_PYTHONPATH###',repr(Ganga.PACKAGE.setup.getPackagePath2('subprocess','syspath',force=True)))
-      script = script.replace('###TARFILE_PYTHONPATH###',repr(Ganga.PACKAGE.setup.getPackagePath2('tarfile','syspath',force=True)))
+      script = script.replace('###TARFILE_PYTHONPATH###',repr(Ganga.PACKAGE.setup.getPackagePath2('tarfile','syspath',force=True)))             
 
       return job.getInputWorkspace().writefile(FileBuffer('__jobscript__',script),executable=1)
 
@@ -393,8 +504,43 @@ sys.exit()
             try:
                 shutil.rmtree(self.workdir)
             except OSError,x:
-                logger.warning('problem removing the workdir %s: %s',str(self.id),str(x))        
+                logger.warning('problem removing the workdir %s: %s',str(self.id),str(x))            
     
+    def postprocess(self, outputfiles, outputdir):    
+        
+
+        def findOutputFile(className, pattern):
+            for outputfile in outputfiles:
+                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
+                    return outputfile
+
+            return None 
+
+        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
+
+        if not os.path.exists(postprocessLocationsPath):
+            return
+        
+        postprocesslocations = open(postprocessLocationsPath, 'r')
+        
+        for line in postprocesslocations.readlines():
+            lineParts = line.split(' ') 
+            outputType = lineParts[0] 
+            outputPattern = lineParts[1]
+            outputPath = lineParts[2]           
+
+            if line.startswith('massstorage'):
+                outputFile = findOutputFile('MassStorageFile', outputPattern)
+                if outputFile is not None:
+                    outputFile.setLocation(outputPath.strip('\n'))
+            else:
+                pass
+                #to be implemented for other output file types
+                
+        postprocesslocations.close()
+  
+        os.system('rm %s' % postprocessLocationsPath)
+
     def updateMonitoringInformation(jobs):
 
       def get_exit_code(f):
