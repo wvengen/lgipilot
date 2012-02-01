@@ -1311,6 +1311,8 @@ try:
         import subprocess
         printInfo('Load application executable with subprocess module')
         status = execSyscmdSubprocess('source %s; %s %s' % (env_setup_script, appexec, appargs), wdir)
+        printInfo('source %s; %s %s' % (env_setup_script, appexec, appargs))
+        printInfo(wdir)
     except ImportError,err:
         # otherwise, use separate threads to control process IO pipes 
         printInfo('Load application executable with separate threads')
@@ -1329,8 +1331,71 @@ try:
 
     if not status:
         raise Exception('Application execution failed.')
-    printInfo('Application execution passed with exit code %d.' % exitcode)         
+    printInfo('Application execution passed with exit code %d.' % exitcode)            
 
+#   system command executor with subprocess
+    def execSyscmdSubprocessAndReturnOutput(cmd):
+
+        exitcode = -999
+        mystdout = ''
+        mystderr = ''
+
+        try:
+            child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            (mystdout, mystderr) = child.communicate()
+            exitcode = child.returncode
+        finally:
+            pass
+
+        return (exitcode, mystdout, mystderr)
+
+
+    def uploadToSE(lcgseItem):
+        
+        import re
+
+        lcgseItems = lcgseItem.split(' ')
+
+        filenameWildChar = lcgseItems[1]
+        lfc_host = lcgseItems[2]
+
+        cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
+
+        os.environ['LFC_HOST'] = lfc_host
+        
+        guidResults = []
+
+        import glob 
+        for currentFile in glob.glob(os.path.join(orig_wdir, filenameWildChar)):
+            cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
+            cmd = cmd.replace('filename', currentFile)
+            cmd = cmd + ' file:%s' % currentFile
+            printInfo(cmd)  
+            (exitcode, mystdout, mystderr) = execSyscmdSubprocessAndReturnOutput(cmd)
+            if exitcode == 0:
+                printInfo('result from cmd %s is %s' % (cmd,str(mystdout)))
+                match = re.search('(guid:\S+)',mystdout)
+                if match:
+                    guidResults.append(mystdout)
+            else:
+                printError('cmd %s failed with error : %s' % (cmd, mystderr))   
+
+        return guidResults      
+        
+    postProcessOutputResult = postprocessoutput(orig_wdir)
+
+    lcgFile = open(os.path.join(orig_wdir, '__lcgseuploads__'), 'w')
+        
+#   code here for upload to lcg se
+    if postProcessOutputResult is not None:
+        for lcgseItem in postProcessOutputResult:
+            guids = uploadToSE(lcgseItem)
+            for guid in guids:
+                lcgFile.write('%s->%s\\n' % (lcgseItem, guid))           
+
+    lcgFile.close()     
+
+    printInfo(str(os.listdir(orig_wdir)))   
     createPackedOutputSandbox(outputsandbox,None,orig_wdir)
 
 #   pack outputsandbox
@@ -1340,30 +1405,6 @@ try:
 
     printInfo('Pack outputsandbox passed.')
     monitor.stop(exitcode)
-
-    printInfo(os.listdir(orig_wdir))
-
-    def uploadToSE(lcgseItem):
-
-        lcgseItems = lcgseItem.split(' ')
-
-        filenameWildChar = lcgseItems[1]
-        lfc_host = lcgseItems[2]
-        dest_SE = lcgseItems[3]
-
-        os.environ['LFC_HOST'] = lfc_host
-        
-        import glob 
-        for currentFile in glob.glob(filenameWildChar):
-            cmd = 'lcg-cr --vo %s -P generated -d %s file:/%s' % (vo, dest_SE, currentFile)
-            printInfo(cmd)      
-        
-    postProcessOutputResult = postprocessoutput(orig_wdir)
-        
-#   code here for upload to lcg se
-    if postProcessOutputResult is not None:
-        for lcgseItem in postProcessOutputResult:
-            uploadToSE(lcgseItem)
     
     # Clean up after us - All log files and packed outputsandbox should be in "wdir"
     if scratchdir:
@@ -1545,12 +1586,17 @@ sys.exit(0)
             for line in fileRead.readlines(): 
                 line = line.strip()     
                 if line.startswith('massstorage'):
-                    output_sandbox += [line.split(' ')[1]]
+                    massStoragePattern = line.split(' ')[1]
+                    if massStoragePattern not in output_sandbox:        
+                        output_sandbox += [massStoragePattern]
                 elif line.startswith('lcgse'):
-                    input_sandbox += [fullFilePath]
+                    if fullFilePath not in input_sandbox:
+                        input_sandbox += [fullFilePath]
+                    if '__lcgseuploads__' not in output_sandbox:
+                        output_sandbox += ['__lcgseuploads__']
 
             fileRead.close()
-        
+
         if config['JobLogHandler'] == 'WMS':
             output_sandbox += ['stdout.gz','stderr.gz']
 
@@ -1717,9 +1763,30 @@ sys.exit(0)
 
             return (exitcode, mystdout, mystderr)
 
+
+        lcgSEUploadsFile = os.path.join(outputdir, '__lcgseuploads__')
+
+        lcgSEUploads = []
+
+        if os.path.exists(lcgSEUploadsFile):
+            fp = open(lcgSEUploadsFile, 'r')
+            for line in fp.readlines():
+                lcgSEUploads.append(line.strip())               
+
+
         if len(outputfiles) > 0:
             for outputFile in outputfiles:
-                if outputFile.__class__.__name__ == 'MassStorageFile':
+                if outputFile.__class__.__name__ == 'LCGStorageElementFile' and len(lcgSEUploads) > 0:
+                        
+                    #todo add to the search pattern lfc host, dest se, etc.
+                    searchPattern = 'lcgse %s' % outputFile.name
+
+                    for lcgSEUpload in lcgSEUploads:
+                        if lcgSEUpload.startswith(searchPattern):
+                            guid = lcgSEUpload[lcgSEUpload.find('->')+2:]
+                            outputFile.setLocation(guid)
+ 
+                elif outputFile.__class__.__name__ == 'MassStorageFile':
 
                     from Ganga.Utility.Config import getConfig
                     massStorageConfig = getConfig('MassStorageOutput') 
@@ -1770,6 +1837,7 @@ sys.exit(0)
                                 #remove file from output
                                 os.system('rm %s' % os.path.join(outputdir, currentFile))
 
+        #todo remove the __lcgseuploads__ file
 
     def updateMonitoringInformation(jobs):
         '''Monitoring loop for normal jobs'''

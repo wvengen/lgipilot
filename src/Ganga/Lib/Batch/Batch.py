@@ -624,6 +624,20 @@ sys.exit(result)
         
         text = text.replace('###INPUT_SANDBOX###',repr(subjob_input_sandbox+master_input_sandbox))
         text = text.replace('###SHAREDOUTPUTPATH###',repr(sharedoutputpath))
+
+        if '__postprocessoutput__' in os.listdir(job.getStringInputDir()):
+            
+            fullFilePath = os.path.join(job.getStringInputDir(), '__postprocessoutput__')
+            fileRead = open(fullFilePath, 'r')
+            for line in fileRead.readlines(): 
+                line = line.strip()     
+                if line.startswith('lcgse'):
+                    filenameWildChar = line.split(' ')[1]
+                    if filenameWildChar not in outputpatterns:
+                        outputpatterns += [filenameWildChar]
+            fileRead.close()
+
+
         text = text.replace('###OUTPUTPATTERNS###',repr(outputpatterns))
         text = text.replace('###JOBID###',repr(self.getJobObject().getFQID('.')))
         text = text.replace('###ENVIRONMENT###',repr(environment))
@@ -650,15 +664,52 @@ sys.exit(result)
 
     def postprocess(self, outputfiles, outputdir):  
     
-        import glob
+        import subprocess 
+        import glob   
+        import re    
+
+        # system command executor with subprocess
+        def execSyscmdSubprocess(cmd):
+
+            exitcode = -999
+            mystdout = ''
+            mystderr = ''
+
+            try:
+                child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                (mystdout, mystderr) = child.communicate()
+                exitcode = child.returncode
+            finally:
+                pass
+
+            return (exitcode, mystdout, mystderr)
+
         if len(outputfiles) > 0:
             for outputFile in outputfiles:
                 if outputFile.__class__.__name__ == 'CompressedFile':
-                    #for currentFile in os.listdir(outputdir):
+
                     for currentFile in glob.glob(os.path.join(outputdir, outputFile.name)):
-                        #if re.match(outputFile.name, currentFile):
                         fullFilePath = os.path.join(outputdir, currentFile)
                         os.system("gzip %s" % fullFilePath)
+
+                elif outputFile.__class__.__name__ == 'LCGStorageElementFile':
+                    
+                    os.environ['LFC_HOST'] = outputFile.lfc_host
+
+                    for currentFile in glob.glob(os.path.join(outputdir, outputFile.name)):
+                        cmd = outputFile.getUploadCmd()
+                        cmd = cmd.replace('filename', currentFile)
+                        cmd = cmd + ' file:%s' % currentFile
+
+                        (exitcode, mystdout, mystderr) = execSyscmdSubprocess(cmd)
+                        if exitcode == 0:
+                
+                            match = re.search('(guid:\S+)',mystdout)
+                            if match:
+                                outputFile.setLocation(mystdout.strip())
+                        else:
+                            logger.warning('cmd %s failed with error : %s' % (cmd, mystderr))
+
 
         def findOutputFile(className, pattern):
             for outputfile in outputfiles:
