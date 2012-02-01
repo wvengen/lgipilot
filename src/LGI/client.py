@@ -9,7 +9,8 @@
 
 import os
 import binascii
-
+import xml.dom.minidom
+import xml2dict
 from connection import Connection, LGIException
 
 
@@ -25,7 +26,7 @@ class Client(Connection):
         '''Initialize LGI client connection.
 
         Configuration can be supplied as parameters, or else defaults will
-        be read from ~/.LGI .
+        be read from the first existing file/directory out of this list:
 
         @type url str
         @param url LGI project server url to work with
@@ -43,22 +44,42 @@ class Client(Connection):
         @param caChain location of CA chain to validate LGI project server with
         '''
         Connection.__init__(self, url, project, certificate, privateKey, caChain)
-        self._user = user
-        self._groups = groups
-        if self._user is None:
-            self._user = self.__readConfig("user")
-        if self._groups is None:
-            self._groups = self.__readConfig("groups")
-        if self._url is None:
-            self._url = self.__readConfig("defaultserver")
-        if self._project is None:
-            self._project = self.__readConfig("defaultproject")
-        if self._certificate is None:
-            self._certificate = os.path.join(os.getenv("HOME"), '.LGI', 'certificate')
-        if self._privateKey is None:
-            self._privateKey= os.path.join(os.getenv("HOME"), '.LGI', 'privatekey')
-        if self._caChain is None:
-            self._caChain= os.path.join(os.getenv("HOME"), '.LGI', 'ca_chain')
+        self.readConfig()
+        if url is not None: self._url = url
+        if project is not None: self._project = project
+        if certificate is not None: self._certificate = certificate
+        if privateKey is not None: self._privateKey = privateKey
+        if caChain is not None: self._chChain = caChain
+        if user is not None: self._user = user
+        if groups is not None: self._groups = groups
+
+    def readConfig(self, cfg=None):
+        '''Read configuration from file or directory.
+
+        When the parameter is not specified, the default configuration will
+        be read, from
+        * where the LGI_CONFIG environment variable points to, or else
+        * the file ~/.LGI/LGI.cfg, or else
+        * the directory ~/.LGI, or else
+        * the file ~/LGI.cfg
+        A configuration file has an xml-like format, while a configuration
+        directory consists of separate files for each configuration item.
+        @see https://github.com/wvengen/LGI/wiki/User-configuration
+
+        @type frm str
+        @param frm Path to configuration file or configuration directory'''
+        if not cfg:
+            cfg = os.getenv('LGI_CONFIG')
+            if not cfg or not os.path.exists(cfg):
+                cfg = os.path.join(os.path.expanduser('~'), '.LGI', 'LGI.cfg')
+                if not os.path.exists(cfg):
+                    cfg = os.path.join(os.path.expanduser('~'), '.LGI')
+                    if not os.path.exists(cfg):
+                        cfg = os.path.join(os.path.expanduser('~'), 'LGI.cfg')
+        if os.path.isdir(cfg):
+            self.__readConfig_dir(cfg)
+        else:
+            self.__readConfig_file(cfg)
 
     def jobState(self, jobId):
         '''Request state of job.
@@ -176,11 +197,37 @@ class Client(Connection):
                 'groups': self._groups})
         return ret['LGI']['response']
 
-    def __readConfig(self, filename):
-        '''Return contents of configuration file relative to directory ~/.LGI .'''
-        f = open(os.path.join(os.getenv('HOME'), '.LGI', filename), "r");
+    def __readConfig_dir(self, directory):
+        '''Parse a configuration directory'''
+        self._user = self.__readConfig_readfile(directory, 'user')
+        self._groups = self.__readConfig_readfile(directory, 'groups')
+        self._url = self.__readConfig_readfile(directory, 'defaultserver')
+        self._project = self.__readConfig_readfile(directory, 'defaultproject')
+        self._certificate = os.path.abspath(os.path.join(directory, 'certificate'))
+        self._privateKey = os.path.abspath(os.path.join(directory, 'privatekey'))
+        self._caChain = os.path.abspath(os.path.join(directory, 'ca_chain'))
+
+    def __readConfig_file(self, filename):
+        '''Parse a configuration file'''
+        cfg = xml2dict.xml2dict(xml.dom.minidom.parse(filename))
+        if not 'LGI_user_config' in cfg:
+            raise LGIClientException('Invalid LGI user configuration: %s'%filename)
+        cfg = cfg['LGI_user_config']
+        self._user = cfg['user']
+        self._groups = cfg['groups']
+        self._url = cfg['defaultserver']
+        self._project = cfg['defaultproject']
+        self._certificate = os.path.abspath(filename)
+        self._privateKey = os.path.abspath(filename)
+        self._caChain = os.path.abspath(filename)
+
+    def __readConfig_readfile(self, directory, filename):
+        '''Return the contents of a text file'''
+        f = open(os.path.join(directory, filename), "r");
         data = f.read()
         f.close()
-        return data.rstrip( "\n\r\t ")
+        result = data.rstrip( "\n\r\t ")
+        return result
+
 
 # vim:ts=4:sw=4:expandtab:
