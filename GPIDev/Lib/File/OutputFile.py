@@ -83,10 +83,20 @@ def findOutputFileTypeByFileName(filename):
     if dotIndex > -1:
         filename = filename[dotIndex+1:]        
 
+    matchCount = 0
+
+    resultKey = None    
+
     for key in outputfilesConfig.keys():
 
         if filename in outputfilesConfig[key]:
-            return key
+            matchCount += 1
+            resultKey = key
+
+    if matchCount == 1:
+        return resultKey
+    elif matchCount > 1:        
+        raise ConfigError('filename %s defined more than once in [Output] config section' % filename)
  
     return None
 
@@ -107,7 +117,6 @@ def string_file_shortcut(v,item):
             elif key == 'LCGStorageElementFile':
                 return LCGStorageElementFile._proxyClass(v)._impl                                
 
-        
         return OutputFile._proxyClass(v)._impl
 
     return None 

@@ -397,7 +397,7 @@ class Job(GangaObject):
             registry = getRegistry(self.default_registry)
 
         if unprepare is True:
-            logger.info("Calling unprepare() from Job.py")
+            logger.debug("Calling unprepare() from Job.py")
             self.application.unprepare()
 
         self.info.uuid = Ganga.Utility.guid.uuid()
@@ -630,9 +630,15 @@ class Job(GangaObject):
                 elif outputFile.__class__.__name__ == 'LCGStorageElementFile':
 
                     lcgSEConfig = getConfig('LCGStorageElementOutput')
-                    content += 'lcgse %s %s %s\n' % (outputFile.name , lcgSEConfig['LFC_HOST'],  lcgSEConfig['dest_SRM'])
+                    content += 'lcgse %s %s %s\n' % (outputFile.name , outputFile.lfc_host,  outputFile.getUploadCmd())
 
         if content is not '':
+
+            postProcessFile = os.path.join(self.getInputWorkspace().getPath(), '__postprocessoutput__')
+
+            if os.path.exists(postProcessFile):
+                os.system('rm  %s' % postProcessFile)
+
             self.getInputWorkspace().writefile(FileBuffer('__postprocessoutput__', content))
 
 
@@ -1238,6 +1244,9 @@ class Job(GangaObject):
             self.status = 'submitted' # FIXME: if job is not split, then default implementation of backend.master_submit already have set status to "submitted"
             self._commit() # make sure that the status change goes to the repository
 
+            #create a file in the inputsandbox with instructions for postporcessing output on the WN
+            self._create_post_process_output()
+
             #send job submission message
             from Ganga.Runtime.spyware import ganga_job_submitted       
 
@@ -1350,6 +1359,21 @@ class Job(GangaObject):
         rslice = self._subjobs_proxy()
         return rslice._display(1)
         
+    def __setattr__(self, attr, value):
+        if attr == 'outputfiles':
+            uniqueValuesDict = []
+            uniqueValues = []
+        
+            for val in value:
+                key = '%s%s' % (val.__class__.__name__, val.name)               
+                if key not in uniqueValuesDict:
+                    uniqueValuesDict.append(key)
+                    uniqueValues.append(val)    
+        
+            #reduce duplicate values here
+            super(Job,self).__setattr__(attr, uniqueValues)     
+        else:   
+            super(Job,self).__setattr__(attr, value)
     
 class JobTemplate(Job):
     """A placeholder for Job configuration parameters.

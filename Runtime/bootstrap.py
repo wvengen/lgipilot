@@ -423,9 +423,9 @@ If ANSI text colours are enabled, then individual colours may be specified like 
         #[Output] section
         outputconfig = makeConfig( "Output", "configuration section for postprocessing the output" )
         outputconfig.addOption('CompressedFile',['stdout','stderr'],'list of output files that will be compressed after job is completed')
-        outputconfig.addOption('ScratchFile',['*.dummy'],'list of output files that will be written to large scratch disk after job is completed')
-        outputconfig.addOption('MassStorageFile',['*.root'],'list of output files that will be written to mass storage after job is completed')
-        outputconfig.addOption('LCGStorageElementFile',['*.dummy1'],'list of output files that will be written to LCG SE after job is completed')
+        outputconfig.addOption('ScratchFile',['*.dummy1'],'list of output files that will be written to large scratch disk after job is completed')
+        outputconfig.addOption('MassStorageFile',['*.dummy'],'list of output files that will be written to mass storage after job is completed')
+        outputconfig.addOption('LCGStorageElementFile',['*.root'],'list of output files that will be written to LCG SE after job is completed')
         outputconfig.addOption('LHCbDataFile',['*.dst','*.digi','*.raw'],'list of output files that will be stored in Storage Element and registered in LHCb file catalogue after job is completed')
 
         #[MassStorageOutput] section
@@ -443,8 +443,8 @@ If ANSI text colours are enabled, then individual colours may be specified like 
                 
         #[LCGStorageElementOutput] section
         outputconfig = makeConfig( "LCGStorageElementOutput", "configuration section for storing of the output to LCG storage element" )
-        outputconfig.addOption('LFC_HOST', 'prod-lfc-atlas.cern.ch', 'LFC host for Logical File Name association with the uploaded output file')
-        outputconfig.addOption('dest_SRM', 'atlas.bu.edu', 'SRM where the output file should be uploaded')
+        outputconfig.addOption('LFC_HOST', 'lfc-dteam.cern.ch', 'LFC host for Logical File Name association with the uploaded output file')
+        outputconfig.addOption('dest_SRM', 'srm-public.cern.ch', 'SRM where the output file should be uploaded')
 
         # all relative names in the path are resolved wrt the _gangaPythonPath
         # the list order is reversed so that A:B maintains the typical path precedence: A overrides B

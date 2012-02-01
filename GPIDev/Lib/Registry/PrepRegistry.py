@@ -92,8 +92,6 @@ class ShareRef(GangaObject):
                 self.name[shareddir] = 1
             else:
                 self.name[shareddir] += 1
-        else:
-           raise Exception('Trying to modify the reference counter of a non-existent directory')
 
         self._setDirty()
         self._releaseWriteAccess()
@@ -128,7 +126,6 @@ class ShareRef(GangaObject):
         self._getWriteAccess()
         cleanup_list = []
         for shareddir in self.name:
-            #logger.info('Checking %s' %shareddir)
             if self.name[shareddir] == 0 and os.path.isdir(shareddir):
                 logger.info('%s no longer being referenced by any objects. Removing directory.' %shareddir)
                 shutil.rmtree(shareddir)
