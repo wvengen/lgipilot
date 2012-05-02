@@ -11,6 +11,7 @@
 # http://www.gnu.org/licenses/gpl.txt
 
 # extract LGI resource daemon and application
+openssl md5 pilotjob.tar.gz | sed 's|^MD5.*=\s*||; s|^|:id:md5:pilotjob.tar.gz:|'
 tar xzf pilotjob.tar.gz
 
 # polling times
@@ -21,7 +22,16 @@ tar xzf pilotjob.tar.gz
 #         otherwise is should be a in the order of minutes or longer.
 LGI_OPTIONS='-ft 3 -st 20'
 
-# setup auto-termination environment
+# auto-termination environment
+#   SCHED_WAIT_TERM After this many seconds of not running a job, the resource
+#        daemon on the grid will terminate itself. This is normally set by
+#        lgipilot from lgipilot.ini's configuration option [LGI]WaitTerm.
+#   SCHED_TERM_AFTER After this many seconds the resource daemon will terminate
+#        itself (after any running job is finished). This is normally set by
+#        lgipilot from lgipilot.ini's configuration option [LGI]MaxRuntime.
+# When one of these variables is unset, the corresponding (termination) action
+# does not take place. 
+#                   
 LGI_ROOT="`pwd`"
 LGI_IS_PILOTJOB=1
 
