@@ -380,6 +380,7 @@ import shutil
 import os
 import time
 import popen2
+import glob
 
 ############################################################################################
 
@@ -398,39 +399,6 @@ environment = ###ENVIRONMENT###
 jobid = ###JOBID###
 
 ###PREEXECUTE###
-
-## system command executor with subprocess
-def execSyscmdSubprocess(cmd):
-
-    exitcode = -999
-    mystdout = ''
-    mystderr = ''
-
-    try:
-        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (mystdout, mystderr) = child.communicate()
-        exitcode = child.returncode
-    finally:
-        pass
-
-    return (exitcode, mystdout, mystderr)
-
-def postprocessoutput():
-
-    massStorageList = []          
-
-    inpfile = os.path.join(###INPUT_DIR###, '__postprocessoutput__')
-    
-    if not os.path.exists(inpfile):
-        return None
-                
-    for line in open(inpfile, 'r').readlines(): 
-        line = line.strip()     
-        if line.startswith('massstorage'):
-            massStorageList.append(line)        
-
-    return [massStorageList]
-
 
 def flush_file(f):
    f.flush()
@@ -540,63 +508,17 @@ from Ganga.Utility.files import multi_glob, recursive_copy
 
 createOutputSandbox(outputpatterns,filefilter,sharedoutputpath)
 
-postprocesslocations = file(os.path.join(sharedoutputpath, '__postprocesslocations__'), 'w')         
+def printError(message):
+    print >>sys.stderr, message
 
-postProcessOutputResult = postprocessoutput()
+def printInfo(message):
+    print >>sys.stdout, message
 
-#code here for upload to castor
-if postProcessOutputResult is not None:
-    for massStorageLine in postProcessOutputResult[0]:
-        massStorageList = massStorageLine.split(' ')
-
-        filenameWildChar = massStorageList[1]
-        cm_mkdir = massStorageList[2]
-        cm_cp = massStorageList[3]
-        cm_ls = massStorageList[4]
-        path = massStorageList[5]
-
-        pathToDirName = os.path.dirname(path)
-        dirName = os.path.basename(path)
-
-        (exitcode, mystdout, mystderr) = execSyscmdSubprocess('nsls %s' % pathToDirName)
-        if exitcode != 0:
-            print >>sys.stderr, 'Error while executing nsls %s command, be aware that Castor commands can be executed only from lxplus, also check if the folder name is correct and existing' % pathToDirName
-            print >>sys.stderr, mystderr
-            continue
-
-        directoryExists = False 
-        for directory in mystdout.split('\\n'):
-            if directory.strip() == dirName:
-                directoryExists = True
-                break
-
-        if not directoryExists:
-            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s' % (cm_mkdir, path))
-            if exitcode != 0:
-                print >>sys.stderr, 'Error while executing %s %s command, check if the ganga user has rights for creating directories in this folder' % (cm_mkdir, path)
-                print >>sys.stderr, mystderr
-                continue
-            
-        import glob 
-        for currentFile in glob.glob(filenameWildChar):
-            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s %s' % (cm_cp, currentFile, os.path.join(path, currentFile)))
-            if exitcode != 0:
-                print >>sys.stderr, 'Error while executing %s %s %s command, check if the ganga user has rights for uploading files to this mass storage folder' % (cm_cp, currentFile, os.path.join(path, currentFile))    
-                print >>sys.stderr, mystderr        
-            else:
-                postprocesslocations.write('massstorage %s %s\\n' % (filenameWildChar, os.path.join(path, currentFile)))
-                #remove file from output dir
-                os.system('rm %s' % currentFile)        
-
-postprocesslocations.close()    
+###OUTPUTUPLOADSPOSTPROCESSING###
 
 print >>sys.stderr,"--- GANGA APPLICATION ERROR END ---"
 
-for fn in ['__syslog__']:
-    try:
-        recursive_copy(fn,sharedoutputpath)
-    except Exception,x:
-        print 'ERROR: (job %s) %s'%(jobid,str(x))
+###OUTPUTSANDBOXPOSTPROCESSING###
 
 ###POSTEXECUTE###
 
@@ -614,6 +536,11 @@ sys.exit(result)
         import inspect
         import Ganga.Core.Sandbox as Sandbox
         import Ganga.Utility as Utility
+        from Ganga.GPIDev.Lib.File.OutputFileManager import getWNCodeForOutputSandbox, getWNCodeForOutputPostprocessing
+        text = text.replace('###OUTPUTSANDBOXPOSTPROCESSING###',getWNCodeForOutputSandbox(job, ['__syslog__', '__postprocesslocations__']))
+
+        text = text.replace('###OUTPUTUPLOADSPOSTPROCESSING###',getWNCodeForOutputPostprocessing(job, ''))
+
         text = text.replace('###INLINEMODULES###',inspect.getsource(Sandbox.WNSandbox))
         text = text.replace('###INLINEHOSTNAMEFUNCTION###',inspect.getsource(Utility.util.hostname))
         text = text.replace('###APPSCRIPTPATH###',repr(appscriptpath))
@@ -623,21 +550,8 @@ sys.exit(result)
         logger.debug('master input sandbox %s ',master_input_sandbox)
         
         text = text.replace('###INPUT_SANDBOX###',repr(subjob_input_sandbox+master_input_sandbox))
-        text = text.replace('###SHAREDOUTPUTPATH###',repr(sharedoutputpath))
-
-        if '__postprocessoutput__' in os.listdir(job.getStringInputDir()):
-            
-            fullFilePath = os.path.join(job.getStringInputDir(), '__postprocessoutput__')
-            fileRead = open(fullFilePath, 'r')
-            for line in fileRead.readlines(): 
-                line = line.strip()     
-                if line.startswith('lcgse'):
-                    filenameWildChar = line.split(' ')[1]
-                    if filenameWildChar not in outputpatterns:
-                        outputpatterns += [filenameWildChar]
-            fileRead.close()
-
-
+        text = text.replace('###SHAREDOUTPUTPATH###',repr(sharedoutputpath))    
+        
         text = text.replace('###OUTPUTPATTERNS###',repr(outputpatterns))
         text = text.replace('###JOBID###',repr(self.getJobObject().getFQID('.')))
         text = text.replace('###ENVIRONMENT###',repr(environment))
@@ -661,87 +575,6 @@ sys.exit(result)
         from Ganga.GPIDev.Lib.File import FileBuffer
         
         return job.getInputWorkspace().writefile(FileBuffer('__jobscript__',text),executable=1)
-
-    def postprocess(self, outputfiles, outputdir):  
-    
-        import subprocess 
-        import glob   
-        import re    
-
-        # system command executor with subprocess
-        def execSyscmdSubprocess(cmd):
-
-            exitcode = -999
-            mystdout = ''
-            mystderr = ''
-
-            try:
-                child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                (mystdout, mystderr) = child.communicate()
-                exitcode = child.returncode
-            finally:
-                pass
-
-            return (exitcode, mystdout, mystderr)
-
-        if len(outputfiles) > 0:
-            for outputFile in outputfiles:
-                if outputFile.__class__.__name__ == 'CompressedFile':
-
-                    for currentFile in glob.glob(os.path.join(outputdir, outputFile.name)):
-                        fullFilePath = os.path.join(outputdir, currentFile)
-                        os.system("gzip %s" % fullFilePath)
-
-                elif outputFile.__class__.__name__ == 'LCGStorageElementFile':
-                    
-                    os.environ['LFC_HOST'] = outputFile.lfc_host
-
-                    for currentFile in glob.glob(os.path.join(outputdir, outputFile.name)):
-                        cmd = outputFile.getUploadCmd()
-                        cmd = cmd.replace('filename', currentFile)
-                        cmd = cmd + ' file:%s' % currentFile
-
-                        (exitcode, mystdout, mystderr) = execSyscmdSubprocess(cmd)
-                        if exitcode == 0:
-                
-                            match = re.search('(guid:\S+)',mystdout)
-                            if match:
-                                outputFile.setLocation(mystdout.strip())
-                        else:
-                            logger.warning('cmd %s failed with error : %s' % (cmd, mystderr))
-
-
-        def findOutputFile(className, pattern):
-            for outputfile in outputfiles:
-                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
-                    return outputfile
-
-            return None 
-
-        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
-
-        if not os.path.exists(postprocessLocationsPath):
-            return
-
-        postprocesslocations = open(postprocessLocationsPath, 'r')
-        
-        for line in postprocesslocations.readlines():
-            lineParts = line.split(' ') 
-            outputType = lineParts[0] 
-            outputPattern = lineParts[1]
-            outputPath = lineParts[2]           
-
-            if line.startswith('massstorage'):
-                outputFile = findOutputFile('MassStorageFile', outputPattern)
-                if outputFile is not None:
-                    outputFile.setLocation(outputPath.strip('\n'))
-            else:
-                pass
-                #to be implemented for other output file types
-                
-        postprocesslocations.close()
-  
-        os.system('rm %s' % postprocessLocationsPath)
 
     def updateMonitoringInformation(jobs):
 

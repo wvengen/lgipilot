@@ -162,6 +162,13 @@ class Node(object):
         from VPrinter import VPrinter
         self.accept(VPrinter(f,sel))
 
+    #printPrepTree is only ever run on applications, from within IPrepareApp.py
+    #if you (manually) try to run printPrepTree on anything other than an application, it will not work as expected
+    #see the relevant code in VPrinter to understand why
+    def printPrepTree(self,f=None, sel='preparable' ):
+        from VPrinter import VPrinter
+        self.accept(VPrinter(f,sel))
+
     def printSummaryTree(self,level = 0, verbosity_level = 0, whitespace_marker = '', out = None, selection = ''):
         """If this method is overridden, the following should be noted:
 
@@ -285,7 +292,10 @@ class Descriptor(object):
 ##                 checklist=filter(lambda x: not implies(x is None,item['optional']) or  x._category != item['category'],val)
 ##                 if len(checklist) > 0:
 ##                     raise AttributeError('%s: attempt to assign incompatible objects %s to the property in category "%s"'%(self._name, str(checklist),item['category']))
-                val = makeGangaList(val,cloneVal, parent = obj)
+                if item['preparable']:
+                    val = makeGangaList(val,cloneVal, parent = obj, preparable = True)
+                else:
+                    val = makeGangaList(val,cloneVal, parent = obj)
             else:
                 val = cloneVal(val)
 
@@ -298,7 +308,10 @@ class Descriptor(object):
 ##                     val = cloneVal(val)
         else:
             if item['sequence']:
-                val = makeGangaList(val, parent = obj)
+                if item['preparable']:
+                    val = makeGangaList(val, parent = obj, preparable = True)
+                else:
+                    val = makeGangaList(val, parent = obj)
 
         obj._data[self._name] = val
 

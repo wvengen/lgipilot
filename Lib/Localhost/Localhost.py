@@ -166,6 +166,7 @@ class Localhost(IBackend):
     def preparejob(self,jobconfig,master_input_sandbox):
 
       job = self.getJobObject()
+      #print str(job.backend_output_postprocess)        
       mon = job.getMonitoringService()
       import Ganga.Core.Sandbox as Sandbox
       subjob_input_sandbox = job.createPackedInputSandbox(jobconfig.getSandboxFiles()
@@ -219,47 +220,6 @@ outputpatterns = ###OUTPUTPATTERNS###
 appscriptpath = ###APPSCRIPTPATH###
 environment = ###ENVIRONMENT###
 workdir = ###WORKDIR###
-
-
-## system command executor with subprocess
-def execSyscmdSubprocess(cmd):
-
-    exitcode = -999
-    mystdout = ''
-    mystderr = ''
-
-    try:
-        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (mystdout, mystderr) = child.communicate()
-        exitcode = child.returncode
-    finally:
-        pass
-
-    return (exitcode, mystdout, mystderr)
-
-def postprocessoutput():
-
-    zippedList = []           
-    massStorageList = []  
-    lcgseList = []         
-
-    inpfile = os.path.join(###INPUT_DIR###, '__postprocessoutput__')
-    
-    if not os.path.exists(inpfile):
-        return None
-                
-    for line in open(inpfile, 'r').readlines(): 
-        line = line.strip()     
-        if line.startswith('zipped'):
-            zippedList.append(line.split()[1])
-        elif line.startswith('massstorage'):
-            massStorageList.append(line)        
-        elif line.startswith('lcgse'):
-            lcgseList.append(line)
-
-    zippedListString = " ".join(zippedList)
-
-    return [zippedListString, massStorageList, lcgseList]
 
 statusfilename = os.path.join(sharedoutputpath,'__jobstatus__')
 
@@ -353,128 +313,21 @@ errorfile.flush()
 
 createOutputSandbox(outputpatterns,None,sharedoutputpath)
 
-outfile.close()
-
-def printError(errorfile, message, error):
+def printError(message):
     errorfile.write(message + os.linesep)
-    errorfile.write(error + os.linesep) 
     errorfile.flush()  
 
-postprocesslocations = file(os.path.join(sharedoutputpath, '__postprocesslocations__'), 'w')         
-
-postProcessOutputResult = postprocessoutput()
-
-def uploadToSE(lcgseItem):
-        
-    import re
-
-    lcgseItems = lcgseItem.split(' ')
-
-    filenameWildChar = lcgseItems[1]
-    lfc_host = lcgseItems[2]
-
-    cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
-
-    os.environ['LFC_HOST'] = lfc_host
-        
-    guidResults = []
-
-    import glob 
-    for currentFile in glob.glob(filenameWildChar):
-        cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
-        cmd = cmd.replace('filename', currentFile)
-        cmd = cmd + ' file:%s' % currentFile
-#        printInfo(cmd)  
-        (exitcode, mystdout, mystderr) = execSyscmdSubprocess(cmd)
-        if exitcode == 0:
-#            printInfo('result from cmd %s is %s' % (cmd,str(mystdout)))
-            match = re.search('(guid:\S+)',mystdout)
-            if match:
-                guidResults.append(mystdout)
-        else:
-            printError('cmd %s failed with error : %s' % (cmd, mystderr))   
-
-    return guidResults      
+def printInfo(message):
+    outfile.write(message + os.linesep)
+    outfile.flush()  
 
 
+###OUTPUTUPLOADSPOSTPROCESSING###
 
-#code here for upload to castor
-if postProcessOutputResult is not None:
-    for massStorageLine in postProcessOutputResult[1]:
-        massStorageList = massStorageLine.split(' ')
-
-        filenameWildChar = massStorageList[1]
-        cm_mkdir = massStorageList[2]
-        cm_cp = massStorageList[3]
-        cm_ls = massStorageList[4]
-        path = massStorageList[5]
-
-        pathToDirName = os.path.dirname(path)
-        dirName = os.path.basename(path)
-
-        (exitcode, mystdout, mystderr) = execSyscmdSubprocess('nsls %s' % pathToDirName)
-        if exitcode != 0:
-            printError(errorfile, 'Error while executing nsls %s command, be aware that Castor commands can be executed only from lxplus, also check if the folder name is correct and existing' % pathToDirName, mystderr)
-            continue
-
-        directoryExists = False 
-        for directory in mystdout.split('\\n'):
-            if directory.strip() == dirName:
-                directoryExists = True
-                break
-
-        if not directoryExists:
-            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s' % (cm_mkdir, path))
-            if exitcode != 0:
-                printError(errorfile, 'Error while executing %s %s command, check if the ganga user has rights for creating directories in this folder' % (cm_mkdir, path), mystderr)
-                continue
-            
-        import glob 
-        for currentFile in glob.glob(filenameWildChar):
-            (exitcode, mystdout, mystderr) = execSyscmdSubprocess('%s %s %s' % (cm_cp, currentFile, os.path.join(path, currentFile)))
-            if exitcode != 0:
-                printError(errorfile, 'Error while executing %s %s %s command, check if the ganga user has rights for uploading files to this mass storage folder' % (cm_cp, currentFile, os.path.join(path, currentFile)), mystderr)
-            else:
-                postprocesslocations.write('massstorage %s %s\\n' % (filenameWildChar, os.path.join(path, currentFile)))
-                #remove file from output dir
-                os.system('rm %s' % currentFile)
-
-    for lcgseItem in postProcessOutputResult[2]:
-        guids = uploadToSE(lcgseItem)
-        for guid in guids:
-            postprocesslocations.write('%s->%s\\n' % (lcgseItem, guid)) 
-
-
+outfile.close()
 errorfile.close()
-postprocesslocations.close()
 
-from Ganga.Utility.files import recursive_copy
-
-f_to_copy = ['stdout','stderr','__syslog__']
-
-
-filesToZip = []
-
-if postProcessOutputResult is not None and postProcessOutputResult[0] != '':
-    patternsToZip = postProcessOutputResult[0].split(' ')
-    for patternToZip in patternsToZip:
-        for currentFile in glob.glob(patternToZip):
-            os.system("gzip %s" % currentFile)
-            filesToZip.append(currentFile)
-            
-final_list_to_copy = []
-
-for f in f_to_copy:
-    if f in filesToZip:
-        final_list_to_copy.append('%s.gz' % f)  
-    else:       
-        final_list_to_copy.append(f)            
-
-for fn in final_list_to_copy:
-    try:
-        recursive_copy(fn,sharedoutputpath)
-    except Exception,x:
-        print 'ERROR: (job'+###JOBID###+')',x
+###OUTPUTSANDBOXPOSTPROCESSING###
 
 line="EXITCODE: " + repr(result) + os.linesep
 line+='STOP: '+time.strftime('%a %b %d %H:%M:%S %Y',time.gmtime(time.time())) + os.linesep
@@ -485,6 +338,11 @@ sys.exit()
 
       import inspect
       script = script.replace('###INLINEMODULES###',inspect.getsource(Sandbox.WNSandbox))
+
+      from Ganga.GPIDev.Lib.File.OutputFileManager import getWNCodeForOutputSandbox, getWNCodeForOutputPostprocessing
+      script = script.replace('###OUTPUTSANDBOXPOSTPROCESSING###',getWNCodeForOutputSandbox(job, ['stdout', 'stderr', '__syslog__', '__postprocesslocations__']))
+
+      script = script.replace('###OUTPUTUPLOADSPOSTPROCESSING###',getWNCodeForOutputPostprocessing(job, ''))
 
       script = script.replace('###APPLICATION_NAME###',repr(job.application._name))
       script = script.replace('###INPUT_SANDBOX###',repr(subjob_input_sandbox+master_input_sandbox))
@@ -549,62 +407,6 @@ sys.exit()
             except OSError,x:
                 logger.warning('problem removing the workdir %s: %s',str(self.id),str(x))            
     
-    def postprocess(self, outputfiles, outputdir):    
-        
-
-        def findOutputFile(className, pattern):
-            for outputfile in outputfiles:
-                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
-                    return outputfile
-
-            return None 
-
-        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
-
-        if not os.path.exists(postprocessLocationsPath):
-            return
-        
-        lcgSEUploads = []
-
-        postprocesslocations = open(postprocessLocationsPath, 'r')
-        
-        for line in postprocesslocations.readlines():
-                
-            if line.strip() == '':      
-                continue
-
-            lineParts = line.split(' ') 
-            outputType = lineParts[0] 
-            outputPattern = lineParts[1]
-            outputPath = lineParts[2]           
-
-            if line.startswith('massstorage'):
-                outputFile = findOutputFile('MassStorageFile', outputPattern)
-                if outputFile is not None:
-                    outputFile.setLocation(outputPath.strip('\n'))
-
-            elif line.startswith('lcgse'):
-                lcgSEUploads.append(line.strip())
-            else:
-                pass
-                #to be implemented for other output file types
-
-        postprocesslocations.close()
-  
-        os.system('rm %s' % postprocessLocationsPath)   
-
-        for outputFile in outputfiles:
-            if outputFile.__class__.__name__ == 'LCGStorageElementFile' and len(lcgSEUploads) > 0:
-                        
-                #todo add to the search pattern lfc host, dest se, etc.
-                searchPattern = 'lcgse %s' % outputFile.name
-
-                for lcgSEUpload in lcgSEUploads:
-                    if lcgSEUpload.startswith(searchPattern):
-                        guid = lcgSEUpload[lcgSEUpload.find('->')+2:]
-                        outputFile.setLocation(guid)
-                
-
     def updateMonitoringInformation(jobs):
 
       def get_exit_code(f):
