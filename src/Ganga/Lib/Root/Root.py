@@ -33,6 +33,8 @@ config.addOption('pythonversion','',"Version number of python used for execution
 config.addOption('version','5.18.00','Version of ROOT')
     
 import os
+from Ganga.Utility.files import expandfilename
+shared_path = os.path.join(expandfilename(getConfig('Configuration')['gangadir']),'shared',getConfig('Configuration')['user'])
  
 
 class Root(IPrepareApp):
@@ -208,7 +210,8 @@ class Root(IPrepareApp):
         'args' : SimpleItem(defvalue=[],typelist=['str','int'],sequence=1,doc="List of arguments for the script. Accepted types are numerics and strings"),
         'version' : SimpleItem(defvalue='5.18.00',doc="The version of Root to run"),
         'usepython' : SimpleItem(defvalue = False, doc="Execute 'script' using Python. The PyRoot libraries are added to the PYTHONPATH."),
-        'is_prepared' : SharedItem(defvalue=None, strict_sequence=0, visitable=1, copyable=1, typelist=['type(None)','str'],protected=0,doc='Location of shared resources. Presence of this attribute implies the application has been prepared.')
+        'is_prepared' : SimpleItem(defvalue=None, strict_sequence=0, visitable=1, copyable=1, typelist=['type(None)','bool'],protected=0,comparable=1,doc='Location of shared resources. Presence of this attribute implies the application has been prepared.'),
+        'hash': SimpleItem(defvalue=None, typelist=['type(None)', 'str'], hidden=1, doc='MD5 hash of the string representation of applications preparable attributes')
         } )
     _category = 'applications'
     _name = 'Root'
@@ -229,18 +232,35 @@ class Root(IPrepareApp):
     def configure(self,masterappconfig):
         return (None,None)
 
+    def unprepare(self, force=False):
+        """
+        Revert a Root() application back to it's unprepared state.
+        """
+        logger.debug('Running unprepare in Root app')
+        if self.is_prepared is not None:
+            self.decrementShareCounter(self.is_prepared.name)
+            self.is_prepared = None
+
+
+
     def prepare(self, force=False):
         """
-        A method to place the Root application into a prepard state.
+        A method to place the Root application into a prepared state.
         """
         if (self.is_prepared is not None) and (force is not True):
             raise Exception('%s application has already been prepared. Use prepare(force=True) to prepare again.'%(self._name))
         self.is_prepared = ShareDir()
         logger.info('Created shared directory: %s'%(self.is_prepared.name))
-        send_to_sharedir = self.copyPreparables()
-        #add the newly created shared directory into the metadata system if the app is associated with a persisted object
-        self.checkPreparedHasParent(self)
-        return 1
+        copy_worked = self.copyPreparables()
+        if copy_worked == 0:
+            logger.error('Failed during prepare() phase. Unpreparing application.')
+            self.unprepare()
+            return 0
+        else:
+            #add the newly created shared directory into the metadata system if the app is associated with a persisted object
+            self.checkPreparedHasParent(self)
+            self.post_prepare()
+            return 1
 
     def _checkset_script(self,value):
         """Callback used to set usepython to 1 if the script name has a *.py or *.PY extention.""" 
@@ -337,7 +357,7 @@ class RootRTHandler(IRuntimeHandler):
         if script==File():
             script=File(defaultScript())
         else:
-            script=File(os.path.join(app.is_prepared.name,os.path.basename(app.script.name)))
+            script=File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(app.script.name)))
 
         # Start ROOT with the -b and -q options to run without a
         # terminal attached.
@@ -360,7 +380,7 @@ class RootRTHandler(IRuntimeHandler):
         if script==File():
             script=File(defaultPyRootScript())
         else:
-            script=File(os.path.join(app.is_prepared.name,os.path.basename(app.script.name)))
+            script=File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(app.script.name)))
 
         arguments = [join('.',script.subdir,split(script.name)[1])]
         arguments.extend([str(s) for s in app.args])
@@ -442,7 +462,7 @@ def downloadWrapper(app):
         else:
             script=File(defaultPyRootScript())
     else:
-        script=File(os.path.join(app.is_prepared.name,os.path.basename(app.script.name)))
+        script=File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(app.script.name)))
 
     commandline = ''
     scriptPath  = join('.',script.subdir,split(script.name)[1])

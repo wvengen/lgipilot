@@ -7,25 +7,32 @@
 from Ganga.GPIDev.Schema import *
 
 from Ganga.Utility.Config import getConfig 
+import Ganga.Utility.logging
+logger = Ganga.Utility.logging.getLogger()
 
-from OutputFile import OutputFile
+from OutputSandboxFile import OutputSandboxFile
 
 import re
 
-class LCGStorageElementFile(OutputFile):
+class LCGStorageElementFile(OutputSandboxFile):
     """LCGStorageElementFile represents a class marking an output file to be written into LCG SE
     """
+    lcgSEConfig = getConfig('Output')['LCGStorageElementFile']['uploadOptions']
+
     _schema = Schema(Version(1,1), {
         'name'        : SimpleItem(defvalue="",doc='name of the file'),
-        'se'          : SimpleItem(defvalue='', copyable=1, doc='the LCG SE hostname'),
+        'joboutputdir': SimpleItem(defvalue="",doc='outputdir of the job with which the outputsandbox file object is associated'),
+        'se'          : SimpleItem(defvalue=lcgSEConfig['dest_SRM'], copyable=1, doc='the LCG SE hostname'),
         'se_type'     : SimpleItem(defvalue='', copyable=1, doc='the LCG SE type'),
         'se_rpath'    : SimpleItem(defvalue='', copyable=1, doc='the relative path to the VO directory on the SE'),
-        'lfc_host'    : SimpleItem(defvalue='', copyable=1, doc='the LCG LFC hostname'),
-        'srm_token'   : SimpleItem(defvalue='', copyable=1, doc='the SRM space token, meaningful only when se_type is set to srmv2')
-})
+        'lfc_host'    : SimpleItem(defvalue=lcgSEConfig['LFC_HOST'], copyable=1, doc='the LCG LFC hostname'),
+        'srm_token'   : SimpleItem(defvalue='', copyable=1, doc='the SRM space token, meaningful only when se_type is set to srmv2'),
+        'SURL'        : SimpleItem(defvalue='', copyable=1, doc='the LCG SE SURL'),
+        'port'        : SimpleItem(defvalue='', copyable=1, doc='the LCG SE port'),
+        'locations' : SimpleItem(defvalue=[],typelist=['str'],sequence=1,doc="list of locations where the outputfiles are uploaded"),
+        'compressed' : SimpleItem(defvalue=False, typelist=['bool'],protected=0,doc='wheather the output file should be compressed before sending somewhere')})
     _category = 'outputfiles'
     _name = "LCGStorageElementFile"
-    _location = []
     _exportmethods = [ "location" , "setLocation" , "get" , "getUploadCmd"]
 
     def __init__(self,name='', **kwds):
@@ -33,11 +40,7 @@ class LCGStorageElementFile(OutputFile):
         """
         super(LCGStorageElementFile, self).__init__(name, **kwds)
 
-        lcgSEConfig = getConfig('LCGStorageElementOutput')
-
-        self.lfc_host = lcgSEConfig['LFC_HOST']
-        self.se = lcgSEConfig['dest_SRM']
-        self._location = []
+        self.locations = []
 
     def __setattr__(self, attr, value):
         if attr == 'se_type' and value not in ['','srmv1','srmv2','se']:
@@ -70,14 +73,14 @@ class LCGStorageElementFile(OutputFile):
         """
         Return list with the locations of the post processed files (if they were configured to upload the output somewhere)
         """
-        if location not in self._location:
-            self._location.append(location)
+        if location not in self.locations:
+            self.locations.append(location)
         
     def location(self):
         """
         Return list with the locations of the post processed files (if they were configured to upload the output somewhere)
         """
-        return self._location
+        return self.locations
 
     
     def getUploadCmd(self):
@@ -95,6 +98,40 @@ class LCGStorageElementFile(OutputFile):
             cmd = cmd + ' -P %s/ganga.%s/filename' % ( self.se_rpath, self.__get_unique_fname__() )
 
         return cmd
+
+    def put(self):
+        """
+        Executes the internally created command for file upload to LCG SE, this method will
+        be called on the client
+        """     
+        import glob
+        import os
+
+        os.environ['LFC_HOST'] = self.lfc_host
+
+        fileName = self.name
+
+        if self.compressed:
+            fileName = '%s.gz' % self.name          
+
+        for currentFile in glob.glob(os.path.join(self.joboutputdir, fileName)):
+            cmd = self.getUploadCmd()
+            cmd = cmd.replace('filename', currentFile)
+            cmd = cmd + ' file:%s' % currentFile
+
+            (exitcode, mystdout, mystderr) = self.execSyscmdSubprocess(cmd)
+            if exitcode == 0:
+                
+                match = re.search('(guid:\S+)',mystdout)
+                if match:
+                    self.setLocation(mystdout.strip())
+
+                #remove file from output
+                os.system('rm %s' % os.path.join(self.joboutputdir, currentFile))
+
+            else:
+                logger.warning('cmd %s failed with error : %s' % (cmd, mystderr))       
+                                        
     
     def get(self, dir):
         """
@@ -128,7 +165,7 @@ class LCGStorageElementFile(OutputFile):
 
         vo = getConfig('LCG')['VirtualOrganisation']  
 
-        for location in self._location:
+        for location in self.locations:
             destFileName = os.path.join(dir, location[-10:])
             cmd = 'lcg-cp --vo %s %s file:%s' % (vo, location, destFileName)
             (exitcode, mystdout, mystderr) = execSyscmdSubprocess(cmd)

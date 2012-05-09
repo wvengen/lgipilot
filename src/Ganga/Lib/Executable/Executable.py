@@ -19,6 +19,8 @@ from Ganga.GPIDev.Base.Proxy import isType
 from Ganga.Core import ApplicationConfigurationError
 
 import os, shutil
+from Ganga.Utility.files import expandfilename
+shared_path = os.path.join(expandfilename(getConfig('Configuration')['gangadir']),'shared',getConfig('Configuration')['user'])
 
 class Executable(IPrepareApp):
     """
@@ -50,7 +52,8 @@ class Executable(IPrepareApp):
         'exe' : SimpleItem(preparable=1,defvalue='echo',typelist=['str','Ganga.GPIDev.Lib.File.File.File'],comparable=1,doc='A path (string) or a File object specifying an executable.'), 
         'args' : SimpleItem(defvalue=["Hello World"],typelist=['str','Ganga.GPIDev.Lib.File.File.File','int'],sequence=1,strict_sequence=0,doc="List of arguments for the executable. Arguments may be strings, numerics or File objects."),
         'env' : SimpleItem(defvalue={},typelist=['str'],doc='Environment'),
-        'is_prepared' : SimpleItem(defvalue=None, strict_sequence=0, visitable=1, copyable=1, typelist=['type(None)','str','bool'],protected=0,comparable=1,doc='Location of shared resources. Presence of this attribute implies the application has been prepared.')
+        'is_prepared' : SimpleItem(defvalue=None, strict_sequence=0, visitable=1, copyable=1, typelist=['type(None)','bool'],protected=0,comparable=1,doc='Location of shared resources. Presence of this attribute implies the application has been prepared.'),
+        'hash': SimpleItem(defvalue=None, typelist=['type(None)', 'str'], hidden=1, doc='MD5 hash of the string representation of applications preparable attributes')
         } )
     _category = 'applications'
     _name = 'Executable'
@@ -115,6 +118,7 @@ class Executable(IPrepareApp):
         #add the newly created shared directory into the metadata system if the app is associated with a persisted object
         self.checkPreparedHasParent(self)
         #return [os.path.join(self.is_prepared.name,os.path.basename(send_to_sharedir))]
+        self.post_prepare()
         return 1
 
 
@@ -193,13 +197,13 @@ class RTHandler(IRuntimeHandler):
                 #we have a file. is it an absolute path?
                 if os.path.abspath(app.exe) == app.exe:
                     logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                    prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(File(app.exe).name)))
+                    prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(File(app.exe).name)))
                 #else assume it's a system binary, so we don't need to transport anything to the sharedir
                 else:
                     prepared_exe = app.exe
             elif type(app.exe) is File:
                 logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(app.exe.name)))
+                prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(app.exe.name)))
 
         c = StandardJobConfig(prepared_exe,app._getParent().inputsandbox,convertIntToStringArgs(app.args),app._getParent().outputsandbox,app.env)
         return c
@@ -230,13 +234,13 @@ class LCGRTHandler(IRuntimeHandler):
                 #we have a file. is it an absolute path?
                 if os.path.abspath(app.exe) == app.exe:
                     logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                    prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(File(app.exe).name)))
+                    prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(File(app.exe).name)))
                 #else assume it's a system binary, so we don't need to transport anything to the sharedir
                 else:
                     prepared_exe = app.exe
             elif type(app.exe) is File:
                 logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(app.exe.name)))
+                prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(app.exe.name)))
 
         return LCGJobConfig(prepared_exe,app._getParent().inputsandbox,convertIntToStringArgs(app.args),app._getParent().outputsandbox,app.env)
 
@@ -250,13 +254,13 @@ class gLiteRTHandler(IRuntimeHandler):
                 #we have a file. is it an absolute path?
                 if os.path.abspath(app.exe) == app.exe:
                     logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                    prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(File(app.exe).name)))
+                    prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(File(app.exe).name)))
                 #else assume it's a system binary, so we don't need to transport anything to the sharedir
                 else:
                     prepared_exe = app.exe
             elif type(app.exe) is File:
                 logger.info("Submitting a prepared application; taking any input files from %s" %(app.is_prepared.name))
-                prepared_exe = File(os.path.join(app.is_prepared.name,os.path.basename(File(app.exe).name)))
+                prepared_exe = File(os.path.join(os.path.join(shared_path,app.is_prepared.name),os.path.basename(File(app.exe).name)))
 
         return gLiteJobConfig(prepared_exe,app._getParent().inputsandbox,convertIntToStringArgs(app.args),app._getParent().outputsandbox,app.env)
 from Ganga.GPIDev.Adapters.ApplicationRuntimeHandlers import allHandlers

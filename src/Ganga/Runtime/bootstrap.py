@@ -394,6 +394,9 @@ RUNTIME_PATH = /my/SpecialExtensions:GangaTest """)
         config.addOption('workspacetype','LocalFilesystem','Type of workspace. Workspace is a place where input and output sandbox of jobs are stored. Currently the only supported type is LocalFilesystem.')
 
         config.addOption('user','','User name. The same person may have different roles (user names) and still use the same gangadir. Unless explicitly set this option defaults to the real user name.')
+        config.addOption('resubmitOnlyFailedSubjobs', True , 'If TRUE (default), calling job.resubmit() will only resubmit FAILED subjobs. Note that the auto_resubmit mechanism will only ever resubmit FAILED subjobs.')
+        config.addOption('deleteUnusedShareDir', 'always' , 'If set to ask the user is presented with a prompt asking whether Shared directories not associated with a persisted Ganga object should be deleted upon Ganga exit. If set to never, shared directories will not be deleted upon exit, even if they are not associated with a persisted Ganga object. If set to always (the default), then shared directories will always be deleted if not associated with a persisted Ganga object.')
+
         # detect default user (equal to unix user name)
         import getpass
         try:
@@ -438,29 +441,21 @@ If ANSI text colours are enabled, then individual colours may be specified like 
 
         #[Output] section
         outputconfig = makeConfig( "Output", "configuration section for postprocessing the output" )
-        outputconfig.addOption('CompressedFile',['stdout','stderr'],'list of output files that will be compressed after job is completed')
-        outputconfig.addOption('ScratchFile',['*.dummy1'],'list of output files that will be written to large scratch disk after job is completed')
-        outputconfig.addOption('MassStorageFile',['*.dummy'],'list of output files that will be written to mass storage after job is completed')
-        outputconfig.addOption('LCGStorageElementFile',['*.root'],'list of output files that will be written to LCG SE after job is completed')
-        outputconfig.addOption('LHCbDataFile',['*.dst','*.digi','*.raw'],'list of output files that will be stored in Storage Element and registered in LHCb file catalogue after job is completed')
 
-        #[MassStorageOutput] section
-        outputconfig = makeConfig( "MassStorageOutput", "configuration section for storing of the output to a mass storage" )
-        outputconfig.addOption('mkdir_cmd', 'nsmkdir', 'Command used to create a directory in the mass storage location')
-        outputconfig.addOption('cp_cmd', 'rfcp', 'Command used to copy out data to the mass storage location')
-        outputconfig.addOption('ls_cmd', 'nsls', 'Command used to list files in the mass storage location')
+        outputconfig.addOption('LCGStorageElementFile',{'fileExtensions':['*.root'], 'backendPostprocess':{'LSF':'client', 'LCG':'WN', 'CREAM':'WN', 'Localhost':'WN'}, 'uploadOptions':{'LFC_HOST':'lfc-dteam.cern.ch', 
+'dest_SRM':'srm-public.cern.ch'}},'fileExtensions:list of output files that will be written to LCG SE, backendPostprocess:defines where postprocessing should be done (WN/client) on different backends, uploadOptions:config values needed for the actual LCG upload')
+
+        massStoragePath = ''
         try:
-            outputconfig.addOption('path', os.path.join(os.environ['CASTOR_HOME'], 'ganga'), 'path to the mass storage location where the files will be stored')
+            massStoragePath = os.path.join(os.environ['CASTOR_HOME'], 'ganga')
         except: 
             from Ganga.Utility.Config import getConfig
             user = getConfig('Configuration')['user']   
             massStoragePath = "/castor/cern.ch/user/%s/%s/ganga" % (user[0], user)      
-            outputconfig.addOption('path', massStoragePath, 'path to the mass storage location where the files will be stored(if you set the env variable CASTOR_HOME to your home directory in castor, you can configure the path to be $CASTOR_HOME/ganga)')
-                
-        #[LCGStorageElementOutput] section
-        outputconfig = makeConfig( "LCGStorageElementOutput", "configuration section for storing of the output to LCG storage element" )
-        outputconfig.addOption('LFC_HOST', 'lfc-dteam.cern.ch', 'LFC host for Logical File Name association with the uploaded output file')
-        outputconfig.addOption('dest_SRM', 'srm-public.cern.ch', 'SRM where the output file should be uploaded')
+
+        massStorageUploadOptions = {'mkdir_cmd':'nsmkdir', 'cp_cmd':'rfcp', 'ls_cmd':'nsls', 'path':massStoragePath}
+
+        outputconfig.addOption('MassStorageFile', {'fileExtensions':['*.dummy'], 'backendPostprocess':{'LSF':'WN', 'LCG':'client', 'CREAM':'client', 'Localhost':'WN'}, 'uploadOptions':massStorageUploadOptions},'fileExtensions:list of output files that will be written to mass storage after job is completed, backendPostprocess:defines where postprocessing should be done (WN/client) on different backends, uploadOptions:config values needed for the actual upload to mass storage')
 
         # all relative names in the path are resolved wrt the _gangaPythonPath
         # the list order is reversed so that A:B maintains the typical path precedence: A overrides B

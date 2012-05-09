@@ -33,6 +33,8 @@ from Ganga.GPIDev.Lib.File import File
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 
 import os, shutil, sys
+from Ganga.Utility.Config import getConfig
+shared_path = os.path.join(expandfilename(getConfig('Configuration')['gangadir']),'shared',getConfig('Configuration')['user'])
 
 class JobStatusError(GangaException):
     def __init__(self,*args):
@@ -144,7 +146,7 @@ class Job(GangaObject):
                                     'time':ComponentItem('jobtime', defvalue=None,protected=1,comparable=0,doc='provides timestamps for status transitions'),
                                     'application' : ComponentItem('applications',doc='specification of the application to be executed'),
                                     'backend': ComponentItem('backends',doc='specification of the resources to be used (e.g. batch system)'),
-                                    'outputfiles' : OutputFileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.OutputFile.OutputFile'],sequence=1,doc="list of OutputFile objects decorating what have to be done with the output files after job is completed "),
+                                    'outputfiles' : OutputFileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.OutputFile.OutputFile'],sequence=1,copyable=0,doc="list of OutputFile objects decorating what have to be done with the output files after job is completed "),
                                     'id' : SimpleItem('',protected=1,comparable=0,doc='unique Ganga job identifier generated automatically'),
                                     'status': SimpleItem('new',protected=1,checkset='_checkset_status',doc='current state of the job, one of "new", "submitted", "running", "completed", "killed", "unknown", "incomplete"'),
                                     'name':SimpleItem('',doc='optional label which may be any combination of ASCII characters',typelist=['str']),
@@ -175,6 +177,7 @@ class Job(GangaObject):
                   { 'attribute' : 'inputdata' },
                   { 'attribute' : 'outputsandbox' } ]
 
+        
 
     # TODO: usage of **kwds may be envisaged at this level to optimize the overriding of values, this must be reviewed
     def __init__(self):
@@ -216,6 +219,20 @@ class Job(GangaObject):
                 assert(not s.state in self)
                 self[s.state] = s
     
+    from Ganga.Utility.Config import getConfig, ConfigError
+
+    backend_output_postprocess = {}
+                
+    for key in getConfig('Output').options.keys():
+        try:
+            for configEntry in getConfig('Output')[key]['backendPostprocess']:
+                if configEntry not in backend_output_postprocess.keys():
+                    backend_output_postprocess[configEntry] = {}
+
+                backend_output_postprocess[configEntry][key] = getConfig('Output')[key]['backendPostprocess'][configEntry]
+        except ConfigError:
+            pass
+
     status_graph = {'new' : Transitions(State('submitting','j.submit()',hook='monitorSubmitting_hook'),
                                         State('removed','j.remove()')),
                     'submitting' : Transitions(State('new','submission failed',hook='rollbackToNewState'),
@@ -328,6 +345,88 @@ class Job(GangaObject):
             self.application.transition_update(new_status)
         return new_status
 
+    def postprocessoutput(self, outputfiles, outputdir):        
+        
+        if len(outputfiles) == 0:
+            return
+
+        def findOutputFile(className, pattern):
+            for outputfile in outputfiles:
+                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
+                    return outputfile
+
+            return None 
+
+        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
+        if not os.path.exists(postprocessLocationsPath):
+            return
+
+        lcgSEUploads = []
+        massStorageUploads = {}
+
+        postprocesslocations = open(postprocessLocationsPath, 'r')
+        
+        for line in postprocesslocations.readlines():
+                
+            if line.strip() == '':      
+                continue
+
+            lineParts = line.split(' ') 
+            outputType = lineParts[0] 
+            outputPattern = lineParts[1]
+            outputPath = lineParts[2]           
+
+            if line.startswith('massstorage'):
+
+                if outputPattern not in massStorageUploads.keys():
+                    massStorageUploads[outputPattern] = []
+                    massStorageUploads[outputPattern].append(outputPath.strip('\n'))                    
+                else:
+                    massStorageUploads[outputPattern].append(outputPath.strip('\n'))                    
+
+            elif line.startswith('lcgse'):
+                lcgSEUploads.append(line.strip())
+            else:
+                pass
+                #to be implemented for other output file types
+
+        postprocesslocations.close()
+
+        for outputfile in outputfiles:
+            backendClass = self.backend.__class__.__name__
+            outputfileClass = outputfile.__class__.__name__
+
+            if self.backend_output_postprocess.has_key(backendClass):
+                if self.backend_output_postprocess[backendClass].has_key(outputfileClass):
+                    if self.backend_output_postprocess[backendClass][outputfileClass] == 'client':
+                        outputfile.put()    
+                    elif self.backend_output_postprocess[backendClass][outputfileClass] == 'WN':        
+
+                        if outputfileClass == 'LCGStorageElementFile' and len(lcgSEUploads) > 0:
+
+                            searchPattern = 'lcgse %s' % outputfile.name
+
+                            for lcgSEUpload in lcgSEUploads:
+                                if lcgSEUpload.startswith(searchPattern):
+                                    guid = lcgSEUpload[lcgSEUpload.find('->')+2:]
+                                    outputfile.setLocation(guid)
+
+                        elif outputfileClass == 'MassStorageFile':
+                                
+                            for massStoragePattern in massStorageUploads.keys():
+                                if massStoragePattern == outputfile.name:
+                                    for location in massStorageUploads[massStoragePattern]:
+                                        outputfile.setLocation(location)     
+            #on Batch backends these files can be postprocessed (compressed) only on the client
+            if outputfileClass == 'OutputSandboxFile' and backendClass == 'LSF':  
+                if outputfile.name == 'stdout' or outputfile.name == 'stderr':
+                    outputfile.put() 
+
+
+        #leave it for the moment for debugging
+        #os.system('rm %s' % postprocessLocationsPath)   
+
+
     def updateMasterJobStatus(self):
         """
         Update master job status based on the status of subjobs.
@@ -376,7 +475,7 @@ class Job(GangaObject):
     def postprocess_hook(self):
         self.application.postprocess()
         self.getMonitoringService().complete()
-        self.backend.postprocess(self.outputfiles, self.getOutputWorkspace().getPath())
+        self.postprocessoutput(self.outputfiles, self.getOutputWorkspace().getPath())
 
     def postprocess_hook_failed(self):
         self.application.postprocess_failed()
@@ -404,10 +503,6 @@ class Job(GangaObject):
 
         #increment the shareref counter if the job we're copying is prepared.
         shareref = GPIProxyObjectFactory(getRegistry("prep").getShareRef())
-#        if hasattr(self.application,'is_prepared') and self.application.is_prepared is not None and self.application.is_prepared is not True:
-#            logger.warning('calling incrementsharecounter from job.py')
-#            self.application.incrementShareCounter(self.application.is_prepared.name)
-#            logger.warning("Increasing shareref in job.py")
         # register the job (it will also commit it)
         # job gets its id now
         registry._add(self)
@@ -604,44 +699,6 @@ class Job(GangaObject):
 
         return None
 
-
-    def _create_post_process_output(self):
- 
-        from Ganga.GPIDev.Lib.File.OutputFile import OutputFile
-        from Ganga.GPIDev.Lib.File.CompressedFile import CompressedFile
-
-        from Ganga.GPIDev.Lib.File.FileBuffer import FileBuffer
-
-        from Ganga.Utility.Config import getConfig
-
-        content = ''
-
-        if len(self.outputfiles) > 0:
-            for outputFile in self.outputfiles:
-                if outputFile.__class__.__name__ == 'CompressedFile':
-
-                    content += 'zipped %s\n' % outputFile.name  
-
-                elif outputFile.__class__.__name__ == 'MassStorageFile': 
-
-                    massStorageConfig = getConfig('MassStorageOutput')  
-                    content += 'massstorage %s %s %s %s %s\n' % (outputFile.name , massStorageConfig['mkdir_cmd'],  massStorageConfig['cp_cmd'], massStorageConfig['ls_cmd'], massStorageConfig['path'])
-
-                elif outputFile.__class__.__name__ == 'LCGStorageElementFile':
-
-                    lcgSEConfig = getConfig('LCGStorageElementOutput')
-                    content += 'lcgse %s %s %s\n' % (outputFile.name , outputFile.lfc_host,  outputFile.getUploadCmd())
-
-        if content is not '':
-
-            postProcessFile = os.path.join(self.getInputWorkspace().getPath(), '__postprocessoutput__')
-
-            if os.path.exists(postProcessFile):
-                os.system('rm  %s' % postProcessFile)
-
-            self.getInputWorkspace().writefile(FileBuffer('__postprocessoutput__', content))
-
-
     def prepare(self,force=False):
         '''A method to put a job's application into a prepared state. Returns 
         True on success.
@@ -740,11 +797,12 @@ class Job(GangaObject):
             raise JobError(msg)
 
         assert(self.subjobs == [])
-        
-        if self.master is not None:
-            msg = "Cannot submit subjobs directly."
-            logger.error(msg)
-            raise JobError(msg)
+
+        # no longer needed with prepared state
+        #if self.master is not None:
+        #    msg = "Cannot submit subjobs directly."
+        #    logger.error(msg)
+        #    raise JobError(msg)
 
         # select the runtime handler
         from Ganga.GPIDev.Adapters.ApplicationRuntimeHandlers import allHandlers
@@ -782,7 +840,7 @@ class Job(GangaObject):
                     logger.info(msg)
 
                 if self.application.is_prepared is not True and self.application.is_prepared is not None:
-                    if not os.path.isdir(self.application.is_prepared.name):
+                    if not os.path.isdir(os.path.join(shared_path,self.application.is_prepared.name)):
                         msg = "Cannot find shared directory for prepared application; reverting job to new and unprepared"
                         self.unprepare()
                         raise JobError(msg)
@@ -833,9 +891,6 @@ class Job(GangaObject):
 
             # notify monitoring-services
             self.monitorPrepare_hook(jobsubconfig) 
-
-            #create a file in the inputsandbox with instructions for postporcessing output on the WN
-            self._create_post_process_output()
 
             # submit the job
             try:
@@ -1206,7 +1261,11 @@ class Job(GangaObject):
         self.getDebugWorkspace().remove(preserve_top=True)
 
         try:
-            rjobs = self.subjobs
+            config_resubOFS = config['resubmitOnlyFailedSubjobs']
+            if config_resubOFS is True:
+                rjobs = [s for s in self.subjobs if s.status in ['failed'] ]
+            else:
+                rjobs = self.subjobs
             if not rjobs:
                 rjobs = [self]
             elif auto_resubmit: # get only the failed jobs for auto resubmit
@@ -1243,9 +1302,6 @@ class Job(GangaObject):
 
             self.status = 'submitted' # FIXME: if job is not split, then default implementation of backend.master_submit already have set status to "submitted"
             self._commit() # make sure that the status change goes to the repository
-
-            #create a file in the inputsandbox with instructions for postporcessing output on the WN
-            self._create_post_process_output()
 
             #send job submission message
             from Ganga.Runtime.spyware import ganga_job_submitted       
@@ -1370,8 +1426,11 @@ class Job(GangaObject):
                     uniqueValuesDict.append(key)
                     uniqueValues.append(val)    
         
+            for value in uniqueValues:
+                value.joboutputdir = self.outputdir
+
             #reduce duplicate values here
-            super(Job,self).__setattr__(attr, uniqueValues)     
+            super(Job,self).__setattr__(attr, uniqueValues)  
         else:   
             super(Job,self).__setattr__(attr, value)
     
