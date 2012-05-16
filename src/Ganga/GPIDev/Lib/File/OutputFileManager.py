@@ -123,7 +123,9 @@ def getWNCodeForOutputPostprocessing(job, indent):
                 if outputfileClassName == 'OutputSandboxFile' and backendClassName not in ['Localhost', 'LSF']:
                     patternsToZip.append(outputFile.name)  
                 elif outputfileClassName != 'OutputSandboxFile' and outputFilePostProcessingOnWN(job, outputfileClassName):
-                    patternsToZip.append(outputFile.name)                                
+                    patternsToZip.append(outputFile.name)  
+                elif outputfileClassName != 'OutputSandboxFile' and outputFilePostProcessingOnClient(job, outputfileClassName) and backendClassName not in ['Localhost', 'LSF']:
+                    patternsToZip.append(outputFile.name)  
     
             if outputfileClassName == 'LCGStorageElementFile' and outputFilePostProcessingOnWN(job, 'LCGStorageElementFile'):
                 lcgCommands.append('lcgse %s %s %s' % (outputFile.name , outputFile.lfc_host,  outputFile.getUploadCmd()))
@@ -243,6 +245,7 @@ def getWNCodeForOutputPostprocessing(job, indent):
 
   
 ###INDENT###postprocesslocations.close()
+###INDENT###printInfo(str(os.listdir(os.getcwd())))
 
 """
     insertScript = insertScript.replace('###LCGCOMMANDS###', str(lcgCommands))
