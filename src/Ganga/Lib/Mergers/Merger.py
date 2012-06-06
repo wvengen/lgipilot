@@ -202,18 +202,22 @@ class AbstractMerger(IMerger):
                                  'This can be overridden with the ignorefailed flag.', j.fqid)
                     return self.failure
             
-                
+            import glob 
             for f in files.keys():
-                p = os.path.join(j.outputdir,f)
-                if not os.path.exists(p):
+                matchedFiles = []
+
+                for matchedFile in glob.glob(os.path.join(j.outputdir,f)):
+                    matchedFiles.append(matchedFile)    
+
+                if len(matchedFiles) == 0:
                     if ignorefailed:
-                        logger.warning('The file %s in Job %s was not found. The file will be ignored.',str(f),j.fqid)
+                        logger.warning('The file pattern %s in Job %s was not found. The file will be ignored.',str(f),j.fqid)
                         continue
                     else:
-                        logger.error('The file %s in Job %s was not found and so the merge can not continue. '\
+                        logger.error('The file pattern %s in Job %s was not found and so the merge can not continue. '\
                                      'This can be overridden with the ignorefailed flag.', str(f), j.fqid)
                         return self.failure
-                files[f].append(p)
+                files[f].extend(matchedFiles)
 
         for k in files.keys():
             # make sure we are not going to over write anything

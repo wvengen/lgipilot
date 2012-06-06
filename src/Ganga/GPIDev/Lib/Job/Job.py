@@ -146,7 +146,7 @@ class Job(GangaObject):
                                     'time':ComponentItem('jobtime', defvalue=None,protected=1,comparable=0,doc='provides timestamps for status transitions'),
                                     'application' : ComponentItem('applications',doc='specification of the application to be executed'),
                                     'backend': ComponentItem('backends',doc='specification of the resources to be used (e.g. batch system)'),
-                                    'outputfiles' : OutputFileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.OutputFile.OutputFile'],sequence=1,copyable=0,doc="list of OutputFile objects decorating what have to be done with the output files after job is completed "),
+                                    'outputfiles' : OutputFileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.OutputFile.OutputFile'],sequence=1,doc="list of OutputFile objects decorating what have to be done with the output files after job is completed "),
                                     'id' : SimpleItem('',protected=1,comparable=0,doc='unique Ganga job identifier generated automatically'),
                                     'status': SimpleItem('new',protected=1,checkset='_checkset_status',doc='current state of the job, one of "new", "submitted", "running", "completed", "killed", "unknown", "incomplete"'),
                                     'name':SimpleItem('',doc='optional label which may be any combination of ASCII characters',typelist=['str']),
@@ -748,8 +748,12 @@ class Job(GangaObject):
             logger.warning("Non-preparable application %s cannot be unprepared" % self.application._name)
             return
 
-        logger.debug("Running unprepare() within Job.py")
-        self.application.unprepare()
+        if not self._readonly():
+            logger.debug("Running unprepare() within Job.py")
+            self.application.unprepare()
+        else:
+            logger.error("Cannot unprepare a job in the %s state" % self.status)
+            
 
 
     def submit(self,keep_going=None,keep_on_fail=None,prepare=False):
@@ -876,6 +880,9 @@ class Job(GangaObject):
 
                     for j in self.subjobs:
                         j._init_workspace()
+
+                        for outputfile in j.outputfiles:
+                            outputfile.joboutputdir = j.outputdir
 
                     rjobs = self.subjobs
                     logger.info('submitting %d subjobs', len(rjobs))
@@ -1065,6 +1072,9 @@ class Job(GangaObject):
             if hasattr(self.application,'is_prepared') and self.application.__getattribute__('is_prepared'):
                 if self.application.is_prepared is not True:
                     self.application.decrementShareCounter(self.application.is_prepared.name)
+                    for sj in self.subjobs:
+                        self.application.decrementShareCounter(self.application.is_prepared.name)
+                        
                 
 
     def fail(self,force=False):
