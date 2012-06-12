@@ -172,16 +172,16 @@ EOF
 
 %files
 %{sharedir}
-%attr(0755,-,-) %{sbindir}/lgipilot
+%attr(0755,root,root) %{sbindir}/lgipilot
 %doc %{docdir}/README.lgipilot
 %doc %{docdir}/README.lgipilot.pilot
 %{vardir}
-%attr(700,-,-) %{vardir}/pilotjob/certificates
+%attr(700,%{runuser},%{rungroup}) %{vardir}/pilotjob/certificates
 #%ghost %{vardir}/pilotjob.tar.gz
-%attr(750,lgipilot,lgi) %dir %{spooldir}
+%attr(750,%{runuser},%{rungroup}) %dir %{spooldir}
 %config %{etcdir}/lgipilot.ini
 %config %{etcdir}/logrotate.d/lgipilot
-%attr(755,-,-) %{_initrddir}/lgipilot
+%attr(755,root,root) %{_initrddir}/lgipilot
 
 %pre
 getent group %{rungroup} >/dev/null || groupadd -r %{rungroup}
