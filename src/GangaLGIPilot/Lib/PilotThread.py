@@ -130,7 +130,7 @@ class PilotThread(GangaThread):
 			# The number of pilotjobs that's submitted but not yet running is
 			# substracted to avoid over-submission when the grid has long waiting
 			# queues.
-			newpilots = int((max(nlgijobs[now-config['WaitNew']:])+1)/2 - curpilotswait)
+			newpilots = int((min(nlgijobs[now-config['WaitNew']:])+1)/2 - curpilotswait)
 
 			newpilots = min(newpilots, config['SchedMax']-config['SchedMin']-curpilots)
 			newpilots = max(newpilots, 0)
