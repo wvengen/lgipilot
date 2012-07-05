@@ -1,6 +1,6 @@
 %define name lgipilot
 %define version_major 0
-%define version_minor 2
+%define version_minor 3
 %define release 1
 
 %define version %{version_major}.%{version_minor}

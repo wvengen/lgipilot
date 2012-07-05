@@ -1,3 +1,13 @@
+20120703 version 0.3
+* update Ganga to 5.8.5
+* add sample manage application
+* include spec file to build RPM
+* continue daemon when job cancellation fails
+* show pilotjob tarball md5 in pilotjob log
+* more conservative scheduling algorithm (thanks to mark)
+* fix small bugs in create_package
+* small improvements in code and documentation
+
 20110331 version 0.2
 * allow to list and cancel pilot jobs
 * update Ganga to 5.5.25
