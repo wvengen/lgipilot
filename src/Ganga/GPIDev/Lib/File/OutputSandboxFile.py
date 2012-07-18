@@ -35,6 +35,12 @@ class OutputSandboxFile(GangaObject):
 
         return "OutputSandboxFile(name='%s')"% self.name
 
+    def setLocation(self):
+        """
+        Sets the location of output files that were uploaded from the WN
+        """
+        pass
+
     def location(self):
         """
         Return list with the locations of the post processed files (if they were configured to upload the output somewhere)
@@ -52,6 +58,13 @@ class OutputSandboxFile(GangaObject):
         Postprocesses (upload) output file to the desired destination, can be overriden in LCGStorageElementFile, MassStorageFile, etc
         """
         raise NotImplementedError
+
+    def getWNInjectedScript(self, outputFiles, indent, patternsToZip, postProcessLocationsFP):
+        """
+        Returns script that have to be injected in the jobscript for postprocessing on the WN
+        """
+        return ""
+
 
     def execSyscmdSubprocess(self, cmd):
 
@@ -72,14 +85,14 @@ class OutputSandboxFile(GangaObject):
 
 
 from Ganga.GPIDev.Base.Filters import allComponentFilters
-from MassStorageFile import MassStorageFile
-from LCGStorageElementFile import LCGStorageElementFile
-
 from Ganga.Utility.Config import getConfig, ConfigError
 
 outputfilesConfig = {}
 
-for key in getConfig('Output').options.keys():
+keys = getConfig('Output').options.keys()
+keys.remove('PostProcessLocationsFileName')
+
+for key in keys:
     try:
         outputFilePatterns = []
 
@@ -118,9 +131,17 @@ def string_file_shortcut(v,item):
         key = findOutputFileTypeByFileName(v)
         if key is not None:
             if key == 'MassStorageFile':
+                from MassStorageFile import MassStorageFile
                 return MassStorageFile._proxyClass(v)._impl         
             elif key == 'LCGStorageElementFile':
+                from LCGStorageElementFile import LCGStorageElementFile
                 return LCGStorageElementFile._proxyClass(v)._impl                                
+            elif key == 'DiracFile':
+                try:
+                    from GangaLHCb.Lib.LHCbDataset.DiracFile import DiracFile
+                    return  DiracFile._proxyClass(v)._impl                                
+                except:
+                    pass
 
         return OutputSandboxFile._proxyClass(v)._impl
 

@@ -1,3 +1,4 @@
+
 ################################################################################
 # Ganga Project. http://cern.ch/ganga
 #
@@ -13,6 +14,7 @@ logger = Ganga.Utility.logging.getLogger()
 from OutputSandboxFile import OutputSandboxFile
 
 import re
+import os
 
 class LCGStorageElementFile(OutputSandboxFile):
     """LCGStorageElementFile represents a class marking an output file to be written into LCG SE
@@ -69,12 +71,33 @@ class LCGStorageElementFile(OutputSandboxFile):
         fname = 'user.%s.%s' % (user, uuid)
         return fname
     
-    def setLocation(self, location):
+    def setLocation(self):
         """
-        Return list with the locations of the post processed files (if they were configured to upload the output somewhere)
+        Sets the location of output files that were uploaded to lcg storage element from the WN
         """
-        if location not in self.locations:
-            self.locations.append(location)
+
+        postprocessLocationsPath = os.path.join(self.joboutputdir, getConfig('Output')['PostProcessLocationsFileName'])
+        if not os.path.exists(postprocessLocationsPath):
+            return
+
+        postprocesslocations = open(postprocessLocationsPath, 'r')
+        
+        for line in postprocesslocations.readlines():
+                
+            if line.strip() == '':      
+                continue
+
+            if line.startswith('lcgse'):
+
+                lcgSEUpload = line.strip()
+                searchPattern = 'lcgse %s' % self.name
+
+                if lcgSEUpload.startswith(searchPattern):
+                    guid = lcgSEUpload[lcgSEUpload.find('->')+2:]
+                    if guid not in self.locations:
+                        self.locations.append(guid)
+
+        postprocesslocations.close()
         
     def location(self):
         """
@@ -105,7 +128,6 @@ class LCGStorageElementFile(OutputSandboxFile):
         be called on the client
         """     
         import glob
-        import os
 
         os.environ['LFC_HOST'] = self.lfc_host
 
@@ -124,7 +146,9 @@ class LCGStorageElementFile(OutputSandboxFile):
                 
                 match = re.search('(guid:\S+)',mystdout)
                 if match:
-                    self.setLocation(mystdout.strip())
+                    location = mystdout.strip()
+                    if location not in self.locations:
+                        self.locations.append(location) 
 
                 #remove file from output
                 os.system('rm %s' % os.path.join(self.joboutputdir, currentFile))
@@ -133,11 +157,87 @@ class LCGStorageElementFile(OutputSandboxFile):
                 logger.warning('cmd %s failed with error : %s' % (cmd, mystderr))       
                                         
     
+    def getWNInjectedScript(self, outputFiles, indent, patternsToZip, postProcessLocationsFP):
+        """
+        Returns script that have to be injected in the jobscript for postprocessing on the WN
+        """        
+        lcgCommands = []
+
+        for outputFile in outputFiles:
+            lcgCommands.append('lcgse %s %s %s' % (outputFile.name , outputFile.lfc_host,  outputFile.getUploadCmd()))
+                
+        script = """\n
+
+###INDENT####system command executor with subprocess
+###INDENT###def execSyscmdSubprocessAndReturnOutputLCG(cmd):
+
+###INDENT###    exitcode = -999
+###INDENT###    mystdout = ''
+###INDENT###    mystderr = ''
+
+###INDENT###    try:
+###INDENT###        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+###INDENT###        (mystdout, mystderr) = child.communicate()
+###INDENT###        exitcode = child.returncode
+###INDENT###    finally:
+###INDENT###        pass
+
+###INDENT###    return (exitcode, mystdout, mystderr)
+        
+###INDENT###def uploadToSE(lcgseItem):
+        
+###INDENT###    import re
+
+###INDENT###    lcgseItems = lcgseItem.split(' ')
+
+###INDENT###    filenameWildChar = lcgseItems[1]
+###INDENT###    lfc_host = lcgseItems[2]
+
+###INDENT###    cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
+
+###INDENT###    os.environ['LFC_HOST'] = lfc_host
+        
+###INDENT###    guidResults = []
+
+###INDENT###    if filenameWildChar in ###PATTERNSTOZIP###:
+###INDENT###        filenameWildChar = '%s.gz' % filenameWildChar
+
+###INDENT###    for currentFile in glob.glob(os.path.join(os.getcwd(), filenameWildChar)):
+###INDENT###        cmd = lcgseItem[lcgseItem.find('lcg-cr'):]
+###INDENT###        cmd = cmd.replace('filename', currentFile)
+###INDENT###        cmd = cmd + ' file:%s' % currentFile
+###INDENT###        printInfo(cmd)  
+###INDENT###        (exitcode, mystdout, mystderr) = execSyscmdSubprocessAndReturnOutputLCG(cmd)
+###INDENT###        if exitcode == 0:
+###INDENT###            printInfo('result from cmd %s is %s' % (cmd,str(mystdout)))
+###INDENT###            match = re.search('(guid:\S+)',mystdout)
+###INDENT###            if match:
+###INDENT###                guidResults.append(mystdout)
+
+###INDENT###            #remove file from output dir
+###INDENT###            os.system('rm %s' % currentFile)
+###INDENT###        else:
+###INDENT###            printError('cmd %s failed' % cmd + os.linesep + mystderr)   
+
+###INDENT###    return guidResults    
+
+###INDENT###for lcgseItem in ###LCGCOMMANDS###:
+###INDENT###    guids = uploadToSE(lcgseItem)
+###INDENT###    for guid in guids:
+###INDENT###        ###POSTPROCESSLOCATIONSFP###.write('%s->%s\\n' % (lcgseItem, guid)) 
+"""
+
+        script = script.replace('###LCGCOMMANDS###', str(lcgCommands))
+        script = script.replace('###PATTERNSTOZIP###', str(patternsToZip))
+        script = script.replace('###INDENT###', indent)
+        script = script.replace('###POSTPROCESSLOCATIONSFP###', postProcessLocationsFP)
+
+        return script   
+
     def get(self, dir):
         """
         Retrieves locally all files matching this LCGStorageElementFile object pattern
         """
-        import os
         import subprocess
         
         # system command executor with subprocess
