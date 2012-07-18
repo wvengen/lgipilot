@@ -536,8 +536,10 @@ sys.exit(result)
         import inspect
         import Ganga.Core.Sandbox as Sandbox
         import Ganga.Utility as Utility
+        from Ganga.Utility.Config import getConfig
         from Ganga.GPIDev.Lib.File.OutputFileManager import getWNCodeForOutputSandbox, getWNCodeForOutputPostprocessing
-        text = text.replace('###OUTPUTSANDBOXPOSTPROCESSING###',getWNCodeForOutputSandbox(job, ['__syslog__', '__postprocesslocations__']))
+        jobidRepr = repr(self.getJobObject().getFQID('.'))
+        text = text.replace('###OUTPUTSANDBOXPOSTPROCESSING###',getWNCodeForOutputSandbox(job, ['__syslog__', getConfig('Output')['PostProcessLocationsFileName']], jobidRepr))
 
         text = text.replace('###OUTPUTUPLOADSPOSTPROCESSING###',getWNCodeForOutputPostprocessing(job, ''))
 
@@ -553,7 +555,7 @@ sys.exit(result)
         text = text.replace('###SHAREDOUTPUTPATH###',repr(sharedoutputpath))    
         
         text = text.replace('###OUTPUTPATTERNS###',repr(outputpatterns))
-        text = text.replace('###JOBID###',repr(self.getJobObject().getFQID('.')))
+        text = text.replace('###JOBID###',jobidRepr)
         text = text.replace('###ENVIRONMENT###',repr(environment))
         text = text.replace('###PREEXECUTE###',self.config['preexecute'])
         text = text.replace('###POSTEXECUTE###',self.config['postexecute'])
@@ -563,8 +565,6 @@ sys.exit(result)
         text = text.replace('###INPUT_DIR###',repr(job.getStringInputDir()))
 
         text = text.replace('###MONITORING_SERVICE###',job.getMonitoringService().getWrapperScriptConstructorText())
-
-        from Ganga.Utility.Config import getConfig
         
         text = text.replace('###GANGADIR###',repr(getConfig('System')['GANGA_PYTHONPATH']))
 

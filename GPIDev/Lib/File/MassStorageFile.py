@@ -4,7 +4,10 @@
 # $Id: MassStorageFile.py,v 0.1 2011-11-09 15:40:00 idzhunov Exp $
 ################################################################################
 
+import os
 from Ganga.GPIDev.Schema import *
+
+from Ganga.Utility.Config import getConfig
 
 from OutputSandboxFile import OutputSandboxFile
 
@@ -37,12 +40,35 @@ class MassStorageFile(OutputSandboxFile):
         return "MassStorageFile(name='%s')"% self.name
     
 
-    def setLocation(self, location):
+    def setLocation(self):
         """
-        Return list with the locations of the post processed files (if they were configured to upload the output somewhere)
+        Sets the location of output files that were uploaded to mass storage from the WN
         """
-        if location not in self.locations:
-            self.locations.append(location)
+        
+        postprocessLocationsPath = os.path.join(self.joboutputdir, getConfig('Output')['PostProcessLocationsFileName'])
+        if not os.path.exists(postprocessLocationsPath):
+            return
+
+        postprocesslocations = open(postprocessLocationsPath, 'r')
+        
+        for line in postprocesslocations.readlines():
+                
+            if line.strip() == '':      
+                continue
+
+            lineParts = line.split(' ') 
+            outputPattern = lineParts[1]
+            outputPath = lineParts[2]           
+
+            if line.startswith('massstorage'):
+
+                if outputPattern == self.name:
+                    massStorageLocation = outputPath.strip('\n')        
+                    if massStorageLocation not in self.locations:
+                        self.locations.append(massStorageLocation)
+     
+        postprocesslocations.close()
+            
         
     def location(self):
         """
@@ -54,13 +80,12 @@ class MassStorageFile(OutputSandboxFile):
         """
         Retrieves locally all files matching this MassStorageFile object pattern
         """
-        import os
 
         if not os.path.isdir(dir):
             print "%s is not a valid directory.... " % dir
             return
 
-        from Ganga.Utility.Config import getConfig 
+         
         cp_cmd = getConfig('Output')['MassStorageFile']['uploadOptions']['cp_cmd']  
 
         for location in self.locations:
@@ -73,10 +98,8 @@ class MassStorageFile(OutputSandboxFile):
         be called on the client
         """     
         import glob
-        import os
         import re
 
-        from Ganga.Utility.Config import getConfig
         massStorageConfig = getConfig('Output')['MassStorageFile']['uploadOptions']
 
         #if Castor mass storage (we understand from the nsls command)
@@ -125,11 +148,94 @@ class MassStorageFile(OutputSandboxFile):
                     logger.warning('Error while executing %s %s %s command, check if the ganga user has rights for uploading files to this mass storage folder' % (cp_cmd, currentFile, massStoragePath))
                 else:
                     logger.info('%s successfully uploaded to mass storage' % currentFile)              
-                    self.setLocation(os.path.join(massStoragePath, os.path.basename(currentFile)))
+                    location = os.path.join(massStoragePath, os.path.basename(currentFile))
+                    if location not in self.locations:
+                        self.locations.append(location)         
                     #remove file from output
                     os.system('rm %s' % os.path.join(self.joboutputdir, currentFile))
 
 
+
+    def getWNInjectedScript(self, outputFiles, indent, patternsToZip, postProcessLocationsFP):
+        """
+        Returns script that have to be injected in the jobscript for postprocessing on the WN
+        """        
+        massStorageCommands = []
+      
+        massStorageConfig = getConfig('Output')['MassStorageFile']['uploadOptions']  
+
+        for outputFile in outputFiles:
+            massStorageCommands.append('massstorage %s %s %s %s %s' % (outputFile.name , massStorageConfig['mkdir_cmd'],  massStorageConfig['cp_cmd'], massStorageConfig['ls_cmd'], massStorageConfig['path'])) 
+
+                
+        script = """\n
+
+###INDENT####system command executor with subprocess
+###INDENT###def execSyscmdSubprocessAndReturnOutputMAS(cmd):
+
+###INDENT###    exitcode = -999
+###INDENT###    mystdout = ''
+###INDENT###    mystderr = ''
+
+###INDENT###    try:
+###INDENT###        child = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+###INDENT###        (mystdout, mystderr) = child.communicate()
+###INDENT###        exitcode = child.returncode
+###INDENT###    finally:
+###INDENT###        pass
+
+###INDENT###    return (exitcode, mystdout, mystderr)
+        
+###INDENT###for massStorageLine in ###MASSSTORAGECOMMANDS###:
+###INDENT###    massStorageList = massStorageLine.split(' ')
+
+###INDENT###    filenameWildChar = massStorageList[1]
+###INDENT###    cm_mkdir = massStorageList[2]
+###INDENT###    cm_cp = massStorageList[3]
+###INDENT###    cm_ls = massStorageList[4]
+###INDENT###    path = massStorageList[5]
+
+###INDENT###    pathToDirName = os.path.dirname(path)
+###INDENT###    dirName = os.path.basename(path)
+
+###INDENT###    (exitcode, mystdout, mystderr) = execSyscmdSubprocessAndReturnOutputMAS('nsls %s' % pathToDirName)
+###INDENT###    if exitcode != 0:
+###INDENT###        printError('Error while executing nsls %s command, be aware that Castor commands can be executed only ###INDENT###from lxplus, also check if the folder name is correct and existing' % pathToDirName + os.linesep + mystderr)
+###INDENT###        continue
+
+###INDENT###    directoryExists = False 
+###INDENT###    for directory in mystdout.split('\\n'):
+###INDENT###        if directory.strip() == dirName:
+###INDENT###            directoryExists = True
+###INDENT###            break
+
+###INDENT###    if not directoryExists:
+###INDENT###        (exitcode, mystdout, mystderr) = execSyscmdSubprocessAndReturnOutputMAS('%s %s' % (cm_mkdir, path))
+###INDENT###        if exitcode != 0:
+###INDENT###            printError('Error while executing %s %s command, check if the ganga user has rights for creating ###INDENT###directories in this folder' % (cm_mkdir, path) + os.linesep + mystderr)
+###INDENT###            continue
+   
+###INDENT###    filenameWildCharZipped = filenameWildChar
+###INDENT###    if filenameWildChar in ###PATTERNSTOZIP###:
+###INDENT###        filenameWildCharZipped = '%s.gz' % filenameWildChar
+
+###INDENT###    for currentFile in glob.glob(os.path.join(os.getcwd(),filenameWildCharZipped)):
+###INDENT###        currentFileBaseName = os.path.basename(currentFile)
+###INDENT###        (exitcode, mystdout, mystderr) = execSyscmdSubprocessAndReturnOutputMAS('%s %s %s' % (cm_cp, currentFile, os.path.join(path, currentFileBaseName)))
+###INDENT###        if exitcode != 0:
+###INDENT###            printError('Error while executing %s %s %s command, check if the ganga user has rights for uploading ###INDENT###files to this mass storage folder' % (cm_cp, currentFile, os.path.join(path, currentFileBaseName)) + os.linesep ###INDENT### + mystderr)
+###INDENT###        else:
+###INDENT###            ###POSTPROCESSLOCATIONSFP###.write('massstorage %s %s\\n' % (filenameWildChar, os.path.join(path, currentFileBaseName)))
+###INDENT###            #remove file from output dir
+###INDENT###            os.system('rm %s' % currentFile)
+"""
+
+        script = script.replace('###MASSSTORAGECOMMANDS###', str(massStorageCommands))
+        script = script.replace('###PATTERNSTOZIP###', str(patternsToZip))
+        script = script.replace('###INDENT###', indent)
+        script = script.replace('###POSTPROCESSLOCATIONSFP###', postProcessLocationsFP)
+
+        return script   
 
 # add MassStorageFile objects to the configuration scope (i.e. it will be possible to write instatiate MassStorageFile() objects via config file)
 import Ganga.Utility.Config

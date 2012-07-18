@@ -21,7 +21,7 @@
 ################################################################################
 
 # store Ganga version based on CVS sticky tag for this file
-_gangaVersion = "$Name: Ganga-5-8-5 $"
+_gangaVersion = "$Name: Ganga-5-8-6 $"
 
 import re
 # [N] in the pattern is important because it prevents CVS from expanding the pattern itself!
@@ -428,8 +428,12 @@ If ANSI text colours are enabled, then individual colours may be specified like 
         #[Output] section
         outputconfig = makeConfig( "Output", "configuration section for postprocessing the output" )
 
+        outputconfig.addOption('PostProcessLocationsFileName', '__postprocesslocations__', 'name of the file that will contain the locations of the uploaded from the WN files')
+
         outputconfig.addOption('LCGStorageElementFile',{'fileExtensions':['*.root'], 'backendPostprocess':{'LSF':'client', 'LCG':'WN', 'CREAM':'WN', 'Localhost':'WN'}, 'uploadOptions':{'LFC_HOST':'lfc-dteam.cern.ch', 
 'dest_SRM':'srm-public.cern.ch'}},'fileExtensions:list of output files that will be written to LCG SE, backendPostprocess:defines where postprocessing should be done (WN/client) on different backends, uploadOptions:config values needed for the actual LCG upload')
+
+        outputconfig.addOption('DiracFile',{'fileExtensions':['*.dst'], 'backendPostprocess':{'Dirac':'WN', 'LSF':'WN', 'LCG':'WN', 'CREAM':'WN', 'Localhost':'WN'}, 'uploadOptions':{}},'fileExtensions:list of output files that will be written to ..., backendPostprocess:defines where postprocessing should be done (WN/client) on different backends, uploadOptions:config values needed for the actual upload')
 
         massStoragePath = ''
         try:

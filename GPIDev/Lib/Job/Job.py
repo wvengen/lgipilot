@@ -31,6 +31,7 @@ from Ganga.Core.GangaRepository import *
 
 from Ganga.GPIDev.Base.Proxy import isType
 from Ganga.GPIDev.Lib.File import File
+from Ganga.GPIDev.Lib.Job.Comment import Comment
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 
 import os, shutil, sys
@@ -144,6 +145,8 @@ class Job(GangaObject):
     _schema = Schema(Version(1,6),{ 'inputsandbox' : FileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.File.File'],sequence=1,doc="list of File objects shipped to the worker node "),
                                     'outputsandbox' : SimpleItem(defvalue=[],typelist=['str'],sequence=1,doc="list of filenames or patterns shipped from the worker node"),
                                     'info':ComponentItem('jobinfos',defvalue=None,doc='JobInfo '),
+                                    'comment':ComponentItem('comments', protected=0,defvalue=None, doc='comment of the job'),
+                                    'commentLocked':SimpleItem(defvalue=1,protected=1,doc="wether writing to comment field is forbidden"),
                                     'time':ComponentItem('jobtime', defvalue=None,protected=1,comparable=0,doc='provides timestamps for status transitions'),
                                     'application' : ComponentItem('applications',doc='specification of the application to be executed'),
                                     'backend': ComponentItem('backends',doc='specification of the resources to be used (e.g. batch system)'),
@@ -225,7 +228,10 @@ class Job(GangaObject):
 
     backend_output_postprocess = {}
                 
-    for key in getConfig('Output').options.keys():
+    keys = getConfig('Output').options.keys()
+    keys.remove('PostProcessLocationsFileName')         
+
+    for key in keys:
         try:
             for configEntry in getConfig('Output')[key]['backendPostprocess']:
                 if configEntry not in backend_output_postprocess.keys():
@@ -354,48 +360,6 @@ class Job(GangaObject):
         if len(outputfiles) == 0:
             return
 
-        def findOutputFile(className, pattern):
-            for outputfile in outputfiles:
-                if outputfile.__class__.__name__ == className and outputfile.name == pattern:
-                    return outputfile
-
-            return None 
-
-        postprocessLocationsPath = os.path.join(outputdir, '__postprocesslocations__')
-        if not os.path.exists(postprocessLocationsPath):
-            return
-
-        lcgSEUploads = []
-        massStorageUploads = {}
-
-        postprocesslocations = open(postprocessLocationsPath, 'r')
-        
-        for line in postprocesslocations.readlines():
-                
-            if line.strip() == '':      
-                continue
-
-            lineParts = line.split(' ') 
-            outputType = lineParts[0] 
-            outputPattern = lineParts[1]
-            outputPath = lineParts[2]           
-
-            if line.startswith('massstorage'):
-
-                if outputPattern not in massStorageUploads.keys():
-                    massStorageUploads[outputPattern] = []
-                    massStorageUploads[outputPattern].append(outputPath.strip('\n'))                    
-                else:
-                    massStorageUploads[outputPattern].append(outputPath.strip('\n'))                    
-
-            elif line.startswith('lcgse'):
-                lcgSEUploads.append(line.strip())
-            else:
-                pass
-                #to be implemented for other output file types
-
-        postprocesslocations.close()
-
         for outputfile in outputfiles:
             backendClass = self.backend.__class__.__name__
             outputfileClass = outputfile.__class__.__name__
@@ -412,22 +376,7 @@ class Job(GangaObject):
                         outputfile.put()    
                     elif self.backend_output_postprocess[backendClass][outputfileClass] == 'WN':        
 
-                        if outputfileClass == 'LCGStorageElementFile' and len(lcgSEUploads) > 0:
-
-                            searchPattern = 'lcgse %s' % outputfile.name
-
-                            for lcgSEUpload in lcgSEUploads:
-                                if lcgSEUpload.startswith(searchPattern):
-                                    guid = lcgSEUpload[lcgSEUpload.find('->')+2:]
-                                    outputfile.setLocation(guid)
-
-                        elif outputfileClass == 'MassStorageFile':
-                                
-                            for massStoragePattern in massStorageUploads.keys():
-                                if massStoragePattern == outputfile.name:
-                                    for location in massStorageUploads[massStoragePattern]:
-                                        outputfile.setLocation(location)      
-
+                        outputfile.setLocation()
 
         #leave it for the moment for debugging
         #os.system('rm %s' % postprocessLocationsPath)   
@@ -1460,7 +1409,17 @@ class Job(GangaObject):
                 value.joboutputdir = self.outputdir
 
             #reduce duplicate values here
-            super(Job,self).__setattr__(attr, uniqueValues)  
+            super(Job,self).__setattr__(attr, uniqueValues) 
+        
+        elif attr == 'comment':
+            if hasattr(self,'commentLocked'): 
+                if self.commentLocked == 1:
+                    print 'writing to comment is locked, use j.comment.unlock() to unlock'
+                else:
+                    super(Job,self).__setattr__(attr, value)
+                    self._setDirty()
+            else:
+                super(Job,self).__setattr__(attr, value)
         else:   
             super(Job,self).__setattr__(attr, value)
     
