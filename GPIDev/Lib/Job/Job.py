@@ -366,8 +366,8 @@ class Job(GangaObject):
 
             #on Batch backends these files can be compressed only on the client
             if backendClass == 'LSF':  
-                if outputfile.compressed and (outputfile.name == 'stdout' or outputfile.name == 'stderr'):
-                    for currentFile in glob.glob(os.path.join(outputfile.joboutputdir, outputfile.name)):
+                if outputfile.compressed and (outputfile.namePattern == 'stdout' or outputfile.namePattern == 'stderr'):
+                    for currentFile in glob.glob(os.path.join(outputfile.joboutputdir, outputfile.namePattern)):
                         os.system("gzip %s" % currentFile)
 
             if self.backend_output_postprocess.has_key(backendClass):
@@ -826,32 +826,35 @@ class Job(GangaObject):
             if 1:
                 if self.splitter:
                     subjobs = self.splitter.validatedSplit(self)
-                    #print "*"*80
-                    #import sys
-                    #subjobs[0].printTree(sys.stdout)
+                    if subjobs:
+                        #print "*"*80
+                        #import sys
+                        #subjobs[0].printTree(sys.stdout)
 
-                    # EBKE changes
-                    i = 0
-                    # bug fix for #53939 -> first set id of the subjob and then append to self.subjobs
-                    #self.subjobs = subjobs
-                    #for j in self.subjobs:
-                    for j in subjobs:
-                        j.info.uuid = Ganga.Utility.guid.uuid()
-                        j.status='new'
-                        j.time.timenow('new')
-                        j.id = i
-                        i += 1
-                        self.subjobs.append(j)
+                        # EBKE changes
+                        i = 0
+                        # bug fix for #53939 -> first set id of the subjob and then append to self.subjobs
+                        #self.subjobs = subjobs
+                        #for j in self.subjobs:
+                        for j in subjobs:
+                            j.info.uuid = Ganga.Utility.guid.uuid()
+                            j.status='new'
+                            j.time.timenow('new')
+                            j.id = i
+                            i += 1
+                            self.subjobs.append(j)
 
-                    for j in self.subjobs:
-                        j._init_workspace()
+                        for j in self.subjobs:
+                            j._init_workspace()
 
-                        for outputfile in j.outputfiles:
-                            outputfile.joboutputdir = j.outputdir
+                            for outputfile in j.outputfiles:
+                                outputfile.joboutputdir = j.outputdir
 
-                    rjobs = self.subjobs
-                    logger.info('submitting %d subjobs', len(rjobs))
-                    self._commit()
+                        rjobs = self.subjobs
+                        logger.info('submitting %d subjobs', len(rjobs))
+                        self._commit()
+                    else:
+                        rjobs = [self]
                 else:
                     rjobs = [self]
 
@@ -1400,7 +1403,7 @@ class Job(GangaObject):
             uniqueValues = []
         
             for val in value:
-                key = '%s%s' % (val.__class__.__name__, val.name)               
+                key = '%s%s' % (val.__class__.__name__, val.namePattern)               
                 if key not in uniqueValuesDict:
                     uniqueValuesDict.append(key)
                     uniqueValues.append(val)    
