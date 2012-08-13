@@ -12,28 +12,33 @@ import fnmatch
 class OutputSandboxFile(GangaObject):
     """OutputSandboxFile represents base class for output files, such as MassStorageFile, LCGStorageElementFile, etc 
     """
-    _schema = Schema(Version(1,1), {'name': SimpleItem(defvalue="",doc='name of the file'),
+    _schema = Schema(Version(1,1), {'namePattern': SimpleItem(defvalue="",doc='pattern of the file name'),
+                                    'localDir': SimpleItem(defvalue="",doc='local dir where the file is stored, used from get and put methods'),
                                     'compressed' : SimpleItem(defvalue=False, typelist=['bool'],protected=0,doc='wheather the output file should be compressed before sending somewhere')})
     _category = 'outputfiles'
     _name = "OutputSandboxFile"
 
-    def __init__(self,name='', **kwds):
+    def __init__(self,namePattern='', localDir='', **kwds):
         """ name is the name of the output file that is going to be processed
             in some way defined by the derived class
         """
         super(OutputSandboxFile, self).__init__()
-        self.name = name
+        self.namePattern = namePattern
+        self.localDir = localDir
     
     def __construct__(self,args):
         if len(args) == 1 and type(args[0]) == type(''):
-            self.name = args[0]
+            self.namePattern = args[0]
+        elif len(args) == 2 and type(args[0]) == type('') and type(args[1]) == type(''):
+            self.namePattern = args[0]
+            self.localDir = args[1]     
         else:
             super(OutputSandboxFile,self).__construct__(args)
         
     def __repr__(self):
         """Get the representation of the file."""
 
-        return "OutputSandboxFile(name='%s')"% self.name
+        return "OutputSandboxFile(namePattern='%s')"% self.namePattern
 
     def setLocation(self):
         """
@@ -47,7 +52,7 @@ class OutputSandboxFile(GangaObject):
         """
         raise NotImplementedError
 
-    def get(self, dir):
+    def get(self):
         """
         Retrieves locally all files matching this OutputSandboxFile object pattern
         """
@@ -65,6 +70,8 @@ class OutputSandboxFile(GangaObject):
         """
         return ""
 
+    def _readonly(self):
+        return False
 
     def execSyscmdSubprocess(self, cmd):
 
