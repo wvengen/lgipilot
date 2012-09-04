@@ -1,3 +1,4 @@
+import re
 from Ganga.GPIDev.Base import GangaObject
 from Ganga.GPIDev.Schema import *
 from Ganga.Utility.Config import getConfig
@@ -8,13 +9,15 @@ class LCGRequirements(GangaObject):
    See also: JDL Attributes Specification at http://cern.ch/glite/documentation
    '''
 
-   _schema = Schema(Version(1,1), { 
+   _schema = Schema(Version(1,2), {
       'software'        : SimpleItem(defvalue=[], typelist=['str'],sequence=1,doc='Software Installations'),
       'nodenumber'      : SimpleItem(defvalue=1,doc='Number of Nodes for MPICH jobs'),
       'memory'          : SimpleItem(defvalue=0,doc='Mininum available memory (MB)'),
       'cputime'         : SimpleItem(defvalue=0,doc='Minimum available CPU time (min)'),
       'walltime'        : SimpleItem(defvalue=0,doc='Mimimum available total time (min)'),
       'ipconnectivity'  : SimpleItem(defvalue=False,doc='External connectivity'),
+      'allowedCEs'      : SimpleItem(defvalue='', doc='allowed CEs in regular expression'),
+      'excludedCEs'     : SimpleItem(defvalue='', doc='excluded CEs in regular expression'),
       'other'           : SimpleItem(defvalue=[],typelist=['str'],sequence=1,doc='Other Requirements')
    })
 
@@ -27,6 +30,8 @@ class LCGRequirements(GangaObject):
                  { 'attribute' : 'cputime',        'widget' : 'Int' },
                  { 'attribute' : 'walltime',       'widget' : 'Int' },
                  { 'attribute' : 'ipconnectivity', 'widget' : 'Bool' },
+                 { 'attribute' : 'allowedCEs',     'widget' : 'String' },
+                 { 'attribute' : 'excludedCEs',    'widget' : 'String' },
                  { 'attribute' : 'other',          'widget' : 'String_List' } ]
 
    def __init__(self):
@@ -39,8 +44,15 @@ class LCGRequirements(GangaObject):
       if not other: return self
       
       merged = LCGRequirements()
-      for name in [ 'software', 'nodenumber', 'memory', 'cputime', 'walltime', 'ipconnectivity', 'other' ]:
-         attr = getattr(other,name)
+      for name in [ 'software', 'nodenumber', 'memory', 'cputime', 'walltime', 'ipconnectivity', 'allowedCEs', 'excludedCEs', 'other' ]:
+
+         attr = ''
+
+         try:
+             attr = getattr(other,name)
+         except KeyError,e:
+             pass
+
          if not attr: attr = getattr(self,name)
          setattr(merged,name,attr)
          
@@ -60,12 +72,49 @@ class LCGRequirements(GangaObject):
 
       config = getConfig('LCG')
 
-      if config['AllowedCEs']:
-         allowed_ces = re.split('\s+',config['AllowedCEs'])
-         requirements += [ '( %s )' % ' || '.join([ 'RegExp("%s",other.GlueCEUniqueID)' % ce for ce in allowed_ces])]
+      ## retrieve allowed_ces and excluded_ces from LCGRequirement object and the config['Allowed/ExcludedCEs']
+      allowed_ces  = []
+      excluded_ces = []
 
+      ## from Ganga configuration
+      if config['AllowedCEs']:
+          ce_req = config['AllowedCEs'].strip()
+          allowed_ces += re.split('\s+', ce_req)
+         
       if config['ExcludedCEs']:
-         excluded_ces = re.split('\s+',config['ExcludedCEs'])
-         requirements += [ '(!RegExp("%s",other.GlueCEUniqueID))' % ce for ce in excluded_ces ]
-      
+          ce_req = config['ExcludedCEs'].strip()
+          excluded_ces += re.split('\s+', ce_req)
+
+      ## from LCGRequirements object
+      re_append = re.compile('^(\++)\s*(.*)')  ## if string starts with '+', it means the requirement to be appeneded
+      try:
+          ce_req = self.allowedCEs.strip()
+          if ce_req:
+              m = re_append.match( ce_req )
+              if m:
+                  allowed_ces += re.split('\s+', m.group(2))
+              else:
+                  allowed_ces  = re.split('\s+', ce_req)
+      except KeyError,e:
+          pass
+
+      try:
+          ce_req = self.excludedCEs.strip()
+          if ce_req:
+              m = re_append.match( ce_req )
+              if m:
+                  excluded_ces += re.split('\s+', m.group(2))
+              else:
+                  excluded_ces  = re.split('\s+', ce_req)
+      except KeyError,e:
+          pass
+
+      ## composing the requirements given the list of allowed_ces and excluded_ces
+      if allowed_ces:
+          requirements += [ '( %s )' % ' || '.join([ 'RegExp("%s",other.GlueCEUniqueID)' % ce for ce in allowed_ces])]
+          
+      if excluded_ces:
+          #requirements += [ '(!RegExp("%s",other.GlueCEUniqueID))' % ce for ce in excluded_ces ]
+          requirements += [ '( %s )' % ' && '.join([ '(!RegExp("%s",other.GlueCEUniqueID))' % ce for ce in excluded_ces])]
+
       return requirements

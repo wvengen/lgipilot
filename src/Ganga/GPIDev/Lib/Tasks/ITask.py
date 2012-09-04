@@ -20,7 +20,7 @@ class ITask(GangaObject):
     _category = 'tasks'
     _name = 'ITask'
     _exportmethods = [ 'run', 'appendTransform', 'overview', 'getJobs', 'remove', 'clone', 'pause', 'check', 'setBackend', 'setParameter',
-                       'insertTransform', 'removeTransform']
+                       'insertTransform', 'removeTransform', 'table']
 
     _tasktype = "ITask"
     
@@ -67,9 +67,15 @@ class ITask(GangaObject):
 
     def update(self):
         """Called by the monitoring thread. Base class just calls update on each Transform"""
+
+        if self.status == "new":
+            return
         
         #logger.warning("Entering update for Task '%s' (%i)... " % (self.name, time.time()))
         for trf in self.transforms:
+            if trf.status != "running":
+                continue
+            
             if trf.update():
                 break
 
@@ -226,7 +232,7 @@ class ITask(GangaObject):
             if new_status == "running/pause":
                 logger.info("Some Transforms of Task %i '%s' have been paused. Check tasks.table() for details!" % (self.id, self.name))
             elif new_status == "completed":
-                logger.warning("Task %i '%s' has completed!" % (self.id, self.name))
+                logger.info("Task %i '%s' has completed!" % (self.id, self.name))
             elif self.status == "completed":
                 logger.warning("Task %i '%s' has been reopened!" % (self.id, self.name))
         self.status = new_status
@@ -241,6 +247,10 @@ class ITask(GangaObject):
 
     def n_status(self,status):
         return sum([t.n_status(status) for t in self.transforms])
+
+    def table(self):
+        from Ganga.GPI import tasks
+        print tasks[self.id:self.id+1].table()
 
     def overview(self, status = ''):
         """ Show an overview of the Task """
