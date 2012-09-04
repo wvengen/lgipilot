@@ -1,5 +1,4 @@
 from common import *
-from sets import Set
 from TaskApplication import ExecutableTask, taskApp
 from Ganga.GPIDev.Lib.Job.Job import JobError
 from Ganga.GPIDev.Lib.Registry.JobRegistry import JobRegistrySlice, JobRegistrySliceProxy
@@ -10,14 +9,18 @@ import time
 class IUnit(GangaObject):
    _schema = Schema(Version(1,0), {
         'status'         : SimpleItem(defvalue='new', protected=1, copyable=0, doc='Status - running, pause or completed', typelist=["str"]),
-        'name'           : SimpleItem(defvalue='Simple Transform', doc='Name of the unit (cosmetic)', typelist=["str"]),
+        'name'           : SimpleItem(defvalue='Simple Unit', doc='Name of the unit (cosmetic)', typelist=["str"]),
         'inputdata'      : ComponentItem('datasets', defvalue=None, optional=1, load_default=False,doc='Input dataset'),
         'outputdata'     : ComponentItem('datasets', defvalue=None, optional=1, load_default=False,doc='Output dataset'),
         'active'         : SimpleItem(defvalue=False, hidden=1,doc='Is this unit active'),
         'active_job_ids' : SimpleItem(defvalue=[], typelist=['int'], sequence=1, hidden=1,doc='Active job ids associated with this unit'),
         'prev_job_ids' : SimpleItem(defvalue=[], typelist=['int'], sequence=1,  hidden=1,doc='Previous job ids associated with this unit'),
         'minor_resub_count' : SimpleItem(defvalue=0, hidden=1,doc='Number of minor resubmits'),
-        'major_resub_count' : SimpleItem(defvalue=0, hidden=1,doc='Number of major resubmits'),     
+        'major_resub_count' : SimpleItem(defvalue=0, hidden=1,doc='Number of major resubmits'),
+        'req_units' : SimpleItem(defvalue=[], typelist=['str'], sequence=1, hidden=1,doc='List of units that must complete for this to start (format TRF_ID:UNIT_ID)'),
+        'start_time' : SimpleItem(defvalue=0, hidden=1,doc='Start time for this unit. Allows a delay to be put in'),
+        'copy_output' : ComponentItem('datasets', defvalue=None, load_default=0,optional=1, doc='The dataset to copy the output of this unit to, e.g. Grid dataset -> Local Dataset'),
+        'merger'    : ComponentItem('mergers', defvalue=None, load_default=0,optional=1, doc='Merger to be run after this unit completes.'),
     })
 
    _category = 'units'
@@ -64,6 +67,12 @@ class IUnit(GangaObject):
 
    def checkForSubmission(self):
       """Check if this unit should submit a job"""
+
+      # check the delay
+      if time.time() < self.start_time:
+         return False
+
+      # check if we already have a job
       if len(self.active_job_ids) == 0:
          return True
       else:
@@ -94,8 +103,22 @@ class IUnit(GangaObject):
       task = self._getParent()._getParent()
       trf = self._getParent()
       maxsub = task.n_tosub()
-      
-      if self.checkForSubmission() and maxsub > 0:
+
+      # check parent unit(s)
+      req_ok = True
+      for req in self.req_units:
+         req_trf_id = int( req.split(":")[0] )
+         req_unit_id = int( req.split(":")[1] )
+
+         if task.transforms[req_trf_id].units[req_unit_id].status != "completed":
+            req_ok = False
+            break
+
+      # set the start time if not already set
+      if len(self.req_units) > 0 and req_ok and self.start_time == 0:
+         self.start_time = time.time() + trf.chain_delay * 60 - 1
+         
+      if req_ok and self.checkForSubmission() and maxsub > 0:
 
          # create job and submit
          j = self.createNewJob()
@@ -138,8 +161,30 @@ class IUnit(GangaObject):
          trf = self._getParent()
                            
          if job.status == "completed":
-            if self.checkCompleted(job):
-               self.updateStatus("completed")               
+            
+            # check if actually completed
+            if not self.checkCompleted(job):
+               return 0
+               
+            # check for DS copy
+            if trf.unit_copy_output:
+               if not self.copy_output:
+                  trf.createUnitCopyOutputDS(self.getID())
+
+               if not self.copyOutput():
+                  return 0
+            
+            # check for merger
+            if trf.unit_merger:
+               if not self.merger:
+                  self.merger = trf.createUnitMerger(self.getID())
+
+               if not self.merge():
+                  return 0
+               
+            # all good so mark unit as completed
+            self.updateStatus("completed")
+            
          elif job.status == "failed" or job.status == "killed":
                
             # check for too many resubs
@@ -264,3 +309,10 @@ class IUnit(GangaObject):
          o += markup("%i   " % self.n_status(s), overview_colours[s])
 
       print o
+
+   def copyOutput(self):
+      """Copy any output to the given dataset"""
+      logger.error("No default implementation for Copy Output - contact plugin developers")
+      return False
+
+   

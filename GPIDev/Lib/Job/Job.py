@@ -31,7 +31,6 @@ from Ganga.Core.GangaRepository import *
 
 from Ganga.GPIDev.Base.Proxy import isType
 from Ganga.GPIDev.Lib.File import File
-from Ganga.GPIDev.Lib.Job.Comment import Comment
 from Ganga.GPIDev.Base.Proxy import GPIProxyObjectFactory
 
 import os, shutil, sys
@@ -145,8 +144,7 @@ class Job(GangaObject):
     _schema = Schema(Version(1,6),{ 'inputsandbox' : FileItem(defvalue=[],typelist=['str','Ganga.GPIDev.Lib.File.File.File'],sequence=1,doc="list of File objects shipped to the worker node "),
                                     'outputsandbox' : SimpleItem(defvalue=[],typelist=['str'],sequence=1,doc="list of filenames or patterns shipped from the worker node"),
                                     'info':ComponentItem('jobinfos',defvalue=None,doc='JobInfo '),
-                                    'comment':ComponentItem('comments', protected=0,defvalue=None, doc='comment of the job'),
-                                    'commentLocked':SimpleItem(defvalue=1,protected=1,doc="wether writing to comment field is forbidden"),
+                                    'comment':SimpleItem('', protected=0, doc='comment of the job'),
                                     'time':ComponentItem('jobtime', defvalue=None,protected=1,comparable=0,doc='provides timestamps for status transitions'),
                                     'application' : ComponentItem('applications',doc='specification of the application to be executed'),
                                     'backend': ComponentItem('backends',doc='specification of the resources to be used (e.g. batch system)'),
@@ -272,6 +270,7 @@ class Job(GangaObject):
                                            State('submitted','j.resubmit()')),
                     'failed' : Transitions(State('removed','j.remove()'),
                                            State('submitting','j.resubmit()'),
+                                           State('completed',hook='postprocess_hook'),
                                            State('submitted','j.resubmit()')),
                     'completed' : Transitions(State('removed','j.remove()'),
                                               State('failed','j.fail()'),
@@ -430,7 +429,7 @@ class Job(GangaObject):
     def postprocess_hook(self):
         self.application.postprocess()
         self.getMonitoringService().complete()
-        self.postprocessoutput(self.outputfiles, self.getOutputWorkspace().getPath())
+        self.postprocessoutput(self.outputfiles, self.getOutputWorkspace(create=False).getPath())
 
     def postprocess_hook_failed(self):
         self.application.postprocess_failed()
@@ -845,7 +844,9 @@ class Job(GangaObject):
                             self.subjobs.append(j)
 
                         for j in self.subjobs:
-                            j._init_workspace()
+                            cfg = Ganga.Utility.Config.getConfig('Configuration')
+                            if cfg['autoGenerateJobWorkspace']:
+                                j._init_workspace()
 
                             for outputfile in j.outputfiles:
                                 outputfile.joboutputdir = j.outputdir
@@ -1079,7 +1080,7 @@ class Job(GangaObject):
             raise JobError('force_status("%s") not allowed. Job may be forced to %s states only.'%(status,Job.allowed_force_states.keys()))
 
         if not self.status in Job.allowed_force_states[status]:
-            raise JobError('Only a job in one of %s may be forced into "failed" (job %s)'%(str(Job.allowed_force_states[status]),self.getFQID('.')))
+            raise JobError('Only a job in one of %s may be forced into "%s" (job %s)'%(str(Job.allowed_force_states[status]),status,self.getFQID('.')))
         
         if not force:
             if self.status in ['submitted','running']:
@@ -1413,16 +1414,11 @@ class Job(GangaObject):
 
             #reduce duplicate values here
             super(Job,self).__setattr__(attr, uniqueValues) 
-        
         elif attr == 'comment':
-            if hasattr(self,'commentLocked'): 
-                if self.commentLocked == 1:
-                    print 'writing to comment is locked, use j.comment.unlock() to unlock'
-                else:
-                    super(Job,self).__setattr__(attr, value)
-                    self._setDirty()
-            else:
-                super(Job,self).__setattr__(attr, value)
+            super(Job,self).__setattr__(attr, value)
+            #if a comment is added mark the job as dirty       
+            if value != '':
+                self._setDirty()
         else:   
             super(Job,self).__setattr__(attr, value)
     
