@@ -190,17 +190,11 @@ under certain conditions; type license() for details.
            file_opens(self.options.config_file,'reading configuration file')
 
         # we run in the batch mode if a script has been specified and other options (such as -i) do not force it
-<<<<<<< HEAD
         self.interactive = self.options.force_interactive
 #        if len(self.args) > 0:
 #            if not self.options.force_interactive:
 #                    self.interactive = False
-=======
-        if len(self.args) > 0:
-            if not self.options.force_interactive:
-                    self.interactive = False
 
->>>>>>> b049b84176ccaf26586810bc6f82928ec484acf0
 # Can't check here if the file is readable, because the path isn't known
 #           file_opens(self.args[0],'reading script')
 
