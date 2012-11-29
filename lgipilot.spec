@@ -179,8 +179,8 @@ EOF
 %attr(700,%{runuser},%{rungroup}) %{vardir}/pilotjob/certificates
 #%ghost %{vardir}/pilotjob.tar.gz
 %attr(750,%{runuser},%{rungroup}) %dir %{spooldir}
-%config %{etcdir}/lgipilot.ini
-%config %{etcdir}/logrotate.d/lgipilot
+%config(noreplace) %{etcdir}/lgipilot.ini
+%config(noreplace) %{etcdir}/logrotate.d/lgipilot
 %attr(755,root,root) %{_initrddir}/lgipilot
 
 %pre
